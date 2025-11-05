@@ -1,0 +1,62 @@
+[project]
+name = "mlx-rag"
+version = "0.1.0"
+description = "Local RAG on Apple Silicon using MLX, Hugging Face models and custom vector DB."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "David Caballero" }
+]
+
+# Core runtime for src/rag (no toys, only what production RAG needs)
+dependencies = [
+  "mlx~=0.29.3",                     # Apple MLX: array / nn framework  [oai_citation:3‡PyPI](https://pypi.org/project/mlx/)
+  "mlx-lm",                          # LLM wrapper on top of MLX  [oai_citation:4‡GitHub](https://github.com/ml-explore/mlx-lm)
+  "huggingface-hub~=0.34.0",          # model / weights from HF Hub  [oai_citation:5‡PyPI](https://pypi.org/project/huggingface-hub/?utm_source=chatgpt.com)
+  "transformers~=4.57.1",            # tokenizers + model configs (BERT, etc.)  [oai_citation:6‡PyPI](https://pypi.org/project/transformers/?utm_source=chatgpt.com)
+  "unstructured[pdf]~=0.18.15",      # PDF partitioning for ingestion  [oai_citation:7‡PyPI](https://pypi.org/project/unstructured/)
+  "pydantic~=2.12.3",                # config / validation layer  [oai_citation:8‡docs.pydantic.dev](https://docs.pydantic.dev/latest/?utm_source=chatgpt.com)
+  "numpy>=1.26",
+  "tqdm>=4.66",
+  "requests>=2.32"
+]
+
+# Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
+[project.optional-dependencies]
+pdf = [
+  "unstructured[pdf]~=0.18.15"
+]
+
+[dependency-groups]
+# Dev tooling you'll actually run on this repo
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "ipython",
+]
+
+# For notebooks, analysis, random ML poking
+experiments = [
+  "jupyterlab",
+  "matplotlib",
+  "pandas",
+]
+
+# For documentation (if you want nice docs later)
+docs = [
+  "mkdocs",
+  "mkdocs-material",
+]
+
+# If you want a separate group just for heavy RAG experiments (optional)
+rag-extras = [
+  "python-dotenv",
+  "rich",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

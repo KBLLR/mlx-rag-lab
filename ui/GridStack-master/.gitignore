@@ -1,0 +1,13 @@
+.DS_Store
+/.build
+/Packages
+/*.xcodeproj
+.swiftpm
+Example\ Apps/iOS/GridStackExample.xcodeproj/project.xcworkspace/xcuserdata
+Example\ Apps/iOS/GridStackExample.xcodeproj/project.xcworkspace/xcuserdata/*
+Example\ Apps/macOS/GridStackExampleMac.xcodeproj/project.xcworkspace/xcuserdata
+Example\ Apps/macOS/GridStackExampleMac.xcodeproj/project.xcworkspace/xcuserdata/*
+Example\ Apps/tvOS/GridStackExampleTv.xcodeproj/project.xcworkspace/xcuserdata
+Example\ Apps/tvOS/GridStackExampleTv.xcodeproj/project.xcworkspace/xcuserdata/*
+Example\ Apps/watchOS/GridStackExampleWatchOS/GridStackExampleWatchOS.xcodeproj/project.xcworkspace/xcuserdata/
+Example\ Apps/watchOS/GridStackExampleWatchOS/GridStackExampleWatchOS.xcodeproj/project.xcworkspace/xcuserdata/*

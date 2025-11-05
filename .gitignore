@@ -1,0 +1,65 @@
+# Python
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo
+
+# Big / local-only stuff
+coremltools/
+iterm2-logs/
+models/
+mlx-models/
+var/
+nanobanana-output/
+
+# Logs, keys, certs
+*.log
+*.crt
+*.key
+
+# Old config
+config/
+
+# Xcode / Apple project noise
+*/xcuserdata/
+*.xcuserstate
+*.rcproject
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# IDEs and editors
+.vscode/
+.DS_Store
+*.sublime-workspace
+*.sublime-project
+
+# Logs and outputs
+var/logs/
+var/outputs/
+iterm2-logs/
+nanobanana-output/
+
+# MLX specific generated files
+*.npz
+
+# Models and embeddings (ignore content, but keep directories if needed for structure)
+# The directories themselves might be tracked, but the large binary files within them are often ignored.
+models/mlx-models/*
+models/embeddings/*
+models/indexes/*
+
+coremltools
+# Other temporary files
+*~
+*.bak
+*.swp
+*.swo

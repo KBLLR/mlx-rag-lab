@@ -1,0 +1,1 @@
+This is a monorepo for MLX RAG. Please refer to the `docs/README.md` for detailed information about the project.

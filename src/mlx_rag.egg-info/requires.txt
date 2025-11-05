@@ -1,0 +1,12 @@
+mlx~=0.29.3
+mlx-lm
+huggingface-hub~=0.34.0
+transformers~=4.57.1
+unstructured[pdf]~=0.18.15
+pydantic~=2.12.3
+numpy>=1.26
+tqdm>=4.66
+requests>=2.32
+
+[pdf]
+unstructured[pdf]~=0.18.15

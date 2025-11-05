@@ -1,0 +1,1 @@
+This is the GEMINI.md for the MLX RAG project. Please refer to `docs/GEMINI.md` for detailed instructions and context.
