@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vdb",
         type=str,
-        default="models/indexes/vdb.npz",
+        default="models/indexes/combined_vdb.npz",
         help="The path to store the vector DB",
     )
     args = parser.parse_args()
