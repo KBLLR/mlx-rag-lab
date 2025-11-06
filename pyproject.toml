@@ -57,6 +57,14 @@ rag-extras = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+packages = [
+    "rag",
+    "rag.config",
+    "rag.ingestion",
+    "rag.retrieval",
+    "rag.models",
+    "rag.cli",
+    "libs",
+    "libs.mlx_core",
+    "libs.utils",
+]

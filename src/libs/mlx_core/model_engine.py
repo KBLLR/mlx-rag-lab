@@ -1,4 +1,5 @@
-from typing import Any, List, Union, Iterator
+import json
+from typing import Any, List, Union, Iterator, Dict
 from mlx_lm import load, generate, stream_generate
 import os
 
@@ -12,12 +13,11 @@ class MLXModelEngine:
 
     def _load_model(self, **kwargs: Any) -> None:
         if self.model_type == "text":
-            self.model, self.tokenizer = load(self.model_id, **kwargs)
+            self.model, self.tokenizer = load(self.model_id, legacy=False, **kwargs)
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
 
-    def _normalize_output(self, output: Union[str, List[str]]) -> str:
-        # mlx_lm.generate may return a single string or a list of strings
+    def _normalize_output(self, output: Union[str, List[str]]) -> Union[str, List[Dict[str, str]]]:
         if isinstance(output, list):
             text = "".join(output)
         else:
@@ -25,9 +25,16 @@ class MLXModelEngine:
 
         text = text.strip()
 
-        # keep your “take first answer” heuristic
+        # Attempt to parse as JSON first
+        try:
+            parsed_json = json.loads(text)
+            return parsed_json
+        except json.JSONDecodeError:
+            pass # Fallback to text normalization if not valid JSON
+
+        # Existing text normalization heuristic
         if "\n\n<|assistant|>" in text:
-            final = text.split("\n\n<|assistant|>:", 1)[0].strip()
+            final = text.split("\n\n<|assistant|>", 1)[0].strip()
         elif "\n\n" in text:
             final = text.split("\n\n", 1)[0].strip()
         else:
@@ -35,7 +42,7 @@ class MLXModelEngine:
 
         return final.replace("\n", " ").strip()
 
-    def generate(self, prompt: str, max_tokens: int = 512, **kwargs: Any) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512, **kwargs: Any) -> Union[str, List[Dict[str, str]]]:
         if self.model_type != "text":
             raise ValueError(f"Unsupported model type: {self.model_type}")
 
@@ -61,5 +68,4 @@ class MLXModelEngine:
             max_tokens=max_tokens,
             **kwargs,
         ):
-            # chunk may be string or list-like; yield normalized incremental piece
             yield "".join(chunk) if isinstance(chunk, list) else str(chunk)

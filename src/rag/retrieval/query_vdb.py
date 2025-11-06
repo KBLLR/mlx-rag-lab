@@ -3,14 +3,16 @@ from rag.retrieval.vdb import VectorDB
 from libs.mlx_core.model_engine import MLXModelEngine
 from typing import Iterator
 
-TEMPLATE = """You are a helpful assistant. Answer the following question truthfully and concisely, using ONLY the provided context. If the answer is not in the context, state that you don't know.
+TEMPLATE = """You are an expert assistant. Your goal is to provide short, direct, and factually grounded answers based ONLY on the provided context. Your total response, including context, must not exceed 4096 tokens. Cite your sources clearly. The retrieval strategy used is hybrid search.
+
+Provide your answer in JSON format, as a list of dictionaries, where each dictionary has an 'answer' key for the concise response and a 'source' key for the citation.
 
 Context:
 {context}
 
 Question: {question}
 
-Concise Answer:"""
+Concise Answer (JSON):"""
 
 
 if __name__ == "__main__":
@@ -25,14 +27,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vdb",
         type=str,
-        default="models/indexes/combined_vdb.npz",
+        default="models/indexes/vdb.npz", # Updated default VDB
         help="The path to read the vector DB",
     )
     # Model
     parser.add_argument(
         "--model-id",
         type=str,
-        default="mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit",
+        default="mlx-community/NeuralBeagle14-7B-4bit-mlx", # Updated default LLM
         help="The Hugging Face model ID or path to the MLX model",
     )
     args = parser.parse_args()

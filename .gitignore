@@ -46,6 +46,10 @@ Tools/
 ui/
 DT-Intent-Sample-main/
 Data/
+mlx-models/llasa-3b-Q4-mlx/
+mlx-models/Phi-3-Vision-MLX/
+mlx-models/t5/
+mlx-models/whisper/
 
 # Other temporary files
 *~
