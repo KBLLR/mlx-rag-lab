@@ -3,7 +3,7 @@ import numpy as np
 import json # Added json import
 from pathlib import Path # Added Path import
 from rag.models.model import Model
-from typing import List, Optional
+from typing import List, Optional, Dict
 from unstructured.partition.pdf import partition_pdf
 
 
@@ -59,39 +59,48 @@ class VectorDB:
     def __init__(self, vdb_file: Optional[str] = None) -> None:
         self.model = Model()
         self.embeddings = None
-        self.content = None
-        self.document_names = []
+        self.content = []  # Now a list of dicts: [{"text": chunk, "source": doc_name}, ...]
+
         if vdb_file:
             try:
                 vdb_path = Path(vdb_file)
-                meta_path = vdb_path.with_suffix(vdb_path.suffix + ".meta.json")
-
-                vdb = mx.load(vdb_file)
-                self.embeddings = vdb["embeddings"]
-                chunk_data = vdb["chunk_data"]
-                chunk_lengths = vdb["chunk_lengths"]
-                self.content = mx_array_to_chunks(chunk_data, chunk_lengths)
-                
-                if meta_path.exists():
-                    with meta_path.open("r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                    self.document_names = list(meta.get("document_names", []))
+                if vdb_path.exists():
+                    vdb = mx.load(vdb_file)
+                    self.embeddings = vdb["embeddings"]
+                    # Reconstruct content from separate text and source arrays
+                    texts = mx_array_to_chunks(vdb["chunk_data"], vdb["chunk_lengths"])
+                    sources = mx_array_to_chunks(vdb["source_data"], vdb["source_lengths"])
+                    self.content = [{"text": t, "source": s} for t, s in zip(texts, sources)]
 
             except Exception as e:
-                raise Exception(f"failed with {e}")
+                print(f"[WARN] Could not load VDB from {vdb_file}: {e}")
+                self.embeddings = None
+                self.content = []
 
-    def ingest(self, content: str, document_names: List[str] = None) -> None:
+    def ingest(self, content: str, document_name: str) -> None:
         chunks = split_text_into_chunks(text=content, chunk_size=256, overlap=50)
-        self.embeddings = self.model.run(chunks)
-        self.content = chunks
-        if document_names:
-            self.document_names.extend(document_names)
+        if not chunks:
+            return
 
-    def query(self, text: str, k: int = 3) -> List[str]:
+        new_embeddings = self.model.run(chunks)
+
+        if self.embeddings is None:
+            self.embeddings = new_embeddings
+        else:
+            self.embeddings = mx.concatenate([self.embeddings, new_embeddings])
+
+        for chunk in chunks:
+            self.content.append({"text": chunk, "source": document_name})
+
+    def query(self, text: str, k: int = 3) -> List[Dict[str, str]]:
+        if self.embeddings is None:
+            return []
         query_emb = self.model.run(text)
         scores = mx.matmul(query_emb, self.embeddings.T) * 100
         sorted_indices = mx.argsort(scores, axis=1)
         top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
+        
+        # Return the list of content dictionaries
         responses = [self.content[i] for i in top_k_indices]
         return responses
 
@@ -99,26 +108,24 @@ class VectorDB:
         target = Path(vdb_file)
         target.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.embeddings is None or self.content is None:
+        if self.embeddings is None or not self.content:
             raise ValueError("VectorDB.savez called before embeddings/content were initialized.")
 
-        chunk_data, chunk_lengths = chunks_to_mx_array(self.content)
+        # Separate texts and sources for saving
+        texts = [item["text"] for item in self.content]
+        sources = [item["source"] for item in self.content]
 
-        # 1) Save numeric tensors
+        chunk_data, chunk_lengths = chunks_to_mx_array(texts)
+        source_data, source_lengths = chunks_to_mx_array(sources)
+
         mx.savez(
             str(target),
             embeddings=self.embeddings,
             chunk_data=chunk_data,
             chunk_lengths=chunk_lengths,
+            source_data=source_data,
+            source_lengths=source_lengths,
         )
-
-        # 2) Save metadata in sidecar JSON
-        meta = {
-            "document_names": self.document_names,
-        }
-        meta_path = target.with_suffix(target.suffix + ".meta.json")
-        with meta_path.open("w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
 def vdb_from_pdf(pdf_file: str) -> VectorDB:

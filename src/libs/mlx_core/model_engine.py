@@ -50,7 +50,6 @@ class MLXModelEngine:
             self.model,
             self.tokenizer,
             prompt=prompt,
-            verbose=False,
             max_tokens=max_tokens,
             **kwargs,
         )
@@ -60,12 +59,12 @@ class MLXModelEngine:
         if self.model_type != "text":
             raise ValueError(f"Unsupported model type: {self.model_type}")
 
-        for chunk in stream_generate(
+        # The underlying stream_generate yields objects; we iterate and yield the text attribute.
+        for token_obj in stream_generate(
             self.model,
             self.tokenizer,
             prompt=prompt,
-            verbose=False,
             max_tokens=max_tokens,
             **kwargs,
         ):
-            yield "".join(chunk) if isinstance(chunk, list) else str(chunk)
+            yield token_obj.text

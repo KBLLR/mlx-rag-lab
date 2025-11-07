@@ -63,7 +63,23 @@ To install development dependencies (including `pytest`, `ruff`, `mypy`):
 uv sync --dev
 ```
 
-## 6. Ignored Files and Directories Catalog
+## 6. Task Research Prerequisite
+
+Before opening or working on any task, run a quick web search on the topic to gather current best practices, terminology, and known blockers. Capture the key links or takeaways in the task’s Notes column (or description) so downstream agents understand the reference context that informed the work.
+
+### Research Action Items:
+- **Search Scope**: Define search terms.
+- **Key Findings**: Summarize 3-5 core insights.
+- **Blockers**: List potential impediments.
+- **Terminology**: Note critical jargon.
+- **References**: Link 1-2 authoritative sources.
+
+### Template Integration:
+- Add 'Research Notes' field to task templates.
+- Ensure field is mandatory for new tasks.
+- Standardize 'Research Notes' format.
+
+## 7. Ignored Files and Directories Catalog
 
 The following files and directories are explicitly ignored by Git, ensuring they remain local development artifacts or are managed separately:
 

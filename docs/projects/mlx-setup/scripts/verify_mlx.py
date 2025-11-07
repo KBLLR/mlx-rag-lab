@@ -1,3 +1,4 @@
+
 import mlx.core as mx
 
 try:
@@ -8,7 +9,9 @@ try:
     # Check the default device MLX is configured to use
     default_device = mx.default_device()
     print(f"MLX default device: {default_device}")
-    assert str(default_device) == "gpu" or str(default_device) == "cpu", "MLX default device not as expected!"
+    print(f"Type of default_device.type: {type(default_device.type)}")
+    print(f"Value of default_device.type: {default_device.type}")
+    assert default_device.type == mx.DeviceType.gpu or default_device.type == mx.DeviceType.cpu, "MLX default device type not as expected!"
     
     print("Core MLX installation verified successfully.")
 except Exception as e:

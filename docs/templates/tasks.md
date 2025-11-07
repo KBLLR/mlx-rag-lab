@@ -2,10 +2,12 @@
 
 Track all work for this project here. Keep the table **sorted by priority** (top = highest).
 
+**Note**: The `Research Notes` field is mandatory for all new tasks. Refer to `DEVELOPMENT_GUIDELINES.md` for details.
+
 ## Backlog
-| ID    | Title                | Description                               | Priority | Owner | Notes |
-|-------|----------------------|-------------------------------------------|----------|-------|-------|
-| P-001 | Define project scope | Flesh out project scope and success crit. | Medium   |       |       |
+| ID    | Title                | Description                               | Priority | Owner | Research Notes | Notes |
+|-------|----------------------|-------------------------------------------|----------|-------|----------------|-------|
+| P-001 | Define project scope | Flesh out project scope and success crit. | Medium   |       |                |       |
 
 ## In Progress
 | ID | Title | Started (YYYY-MM-DD) | Owner | Notes |

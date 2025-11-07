@@ -14,8 +14,10 @@ dependencies = [
   "mlx-lm",                          # LLM wrapper on top of MLX  [oai_citation:4‡GitHub](https://github.com/ml-explore/mlx-lm)
   "huggingface-hub~=0.34.0",          # model / weights from HF Hub  [oai_citation:5‡PyPI](https://pypi.org/project/huggingface-hub/?utm_source=chatgpt.com)
   "transformers~=4.57.1",            # tokenizers + model configs (BERT, etc.)  [oai_citation:6‡PyPI](https://pypi.org/project/transformers/?utm_source=chatgpt.com)
-  "unstructured[pdf]~=0.18.15",      # PDF partitioning for ingestion  [oai_citation:7‡PyPI](https://pypi.org/project/unstructured/)
-  "pydantic~=2.12.3",                # config / validation layer  [oai_citation:8‡docs.pydantic.dev](https://docs.pydantic.dev/latest/?utm_source=chatgpt.com)
+  "unstructured[pdf]~=0.18.15",      # PDF partitioning for ingestion
+  "pydantic~=2.12.3",                # config / validation layer
+  "typer[all]~=0.12.3",              # CLI application framework
+  "rich~=13.7.1",                    # Rich text and beautiful formatting in the terminal
   "numpy>=1.26",
   "tqdm>=4.66",
   "requests>=2.32"
