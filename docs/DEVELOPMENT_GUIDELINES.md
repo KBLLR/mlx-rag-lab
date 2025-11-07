@@ -1,6 +1,6 @@
 # Development Guidelines for mlx-RAG
 
-**Date:** Wednesday, November 5, 2025
+**Date:** Friday, November 7, 2025
 
 This document outlines the development practices, artifact management, and release procedures for the `mlx-RAG` monorepo, with a strong emphasis on maintaining a local-first, MLX-purist approach.
 
@@ -16,11 +16,9 @@ To ensure organized and isolated development, the following branch strategy will
 
 All development, including large models, generated data, and experimental output, should primarily remain local until explicitly ready for broader sharing or publication. Critical items to remain local include:
 
-*   **`KBLLR_face_MCKP/`**: This directory contains specific native client code/assets that are not part of the core RAG engine for distribution at this stage.
-*   **`coremltools/`**: Vendored or external projects not part of the core `mlx-RAG` source.
-*   **`flux/`, `glitchVHS-main/`, `lora/`, `LoRATraining/`, `musicgen/`, `segment_anything/`, `speechcommands/`, `StableDiffusion/`, `Tools/`, `ui/`, `DT-Intent-Sample-main/`, `Data/`**: These directories are either external projects, experimental, or contain large datasets/outputs that are intended for local development and are excluded from version control.
+*   **External Projects and Experiments**: Directories such as `flux/`, `lora/`, `musicgen/`, `segment_anything/`, `speechcommands/`, and `Data/` contain either external projects, experimental code, or large datasets/outputs. These are intended for local development and are excluded from version control.
 *   **Model Weights and Indexes**: The contents of `models/mlx-models/`, `models/embeddings/`, and `models/indexes/` (e.g., `*.npz` files, downloaded LLM checkpoints) are considered local artifacts. While the directories themselves might be tracked for structure, their large binary contents are ignored.
-*   **Generated Logs and Outputs**: Directories like `var/logs/`, `var/outputs/`, `iterm2-logs/`, and `nanobanana-output/` are explicitly ignored (`*.log`, `*.npz` for generated vector DBs).
+*   **Generated Logs and Outputs**: Directories like `var/logs/`, `var/outputs/`, and `.genkit/` (for Genkit traces and runtimes) are explicitly ignored.
 *   **Virtual Environments and IDE-specific files**: These are strictly local to the developer's environment.
 
 ## 3. Staging and Promotion Criteria
@@ -49,7 +47,23 @@ Before any public release or publication, the following checklist must be comple
 *   [ ] **Version Bump**: Update the project version in `pyproject.toml`.
 *   [ ] **Tag Release**: Create a Git tag for the release version on the `main` branch.
 
-## 5. Ignored Files and Directories Catalog
+## 5. Dependency Management
+
+This project uses `uv` for dependency management. The core dependencies are defined in `pyproject.toml`.
+
+To install the core runtime dependencies:
+
+```bash
+uv sync
+```
+
+To install development dependencies (including `pytest`, `ruff`, `mypy`):
+
+```bash
+uv sync --dev
+```
+
+## 6. Ignored Files and Directories Catalog
 
 The following files and directories are explicitly ignored by Git, ensuring they remain local development artifacts or are managed separately:
 
@@ -78,8 +92,7 @@ venv/
 # Logs and outputs
 var/logs/
 var/outputs/
-iterm2-logs/
-nanobanana-output/
+.genkit/
 *.log
 
 # MLX specific generated files
@@ -92,21 +105,12 @@ models/embeddings/
 models/indexes/
 
 # Specific directories to keep local (as per user instruction and inferred from directory listing)
-KBLLR_face_MCKP/
-coremltools/
+Data/
 flux/
-glitchVHS-main/
 lora/
-LoRATraining/
 musicgen/
 segment_anything/
 speechcommands/
-StableDiffusion/
-Tools/
-ui/
-DT-Intent-Sample-main/
-AILib/
-Data/
 
 # Other temporary files
 *~
@@ -114,3 +118,29 @@ Data/
 *.swp
 *.swo
 ```
+
+## 7. Model Management
+
+To facilitate the use of local MLX-compatible models, a utility script is provided for downloading models from the Hugging Face Hub:
+
+### `src/rag/cli/download_model.py`
+
+This script leverages `mlx_lm.utils.load` to download and cache MLX-compatible models locally. It's designed to simplify the process of acquiring model weights, configurations, and tokenizers.
+
+**Usage:**
+
+```bash
+uv run python -m rag.cli.download_model --model-id <HUGGING_FACE_MODEL_ID>
+```
+
+**Example:**
+
+```bash
+uv run python -m rag.cli.download_model --model-id mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit
+```
+
+**Notes:**
+
+*   Replace `<HUGGING_FACE_MODEL_ID>` with the actual model ID from Hugging Face (e.g., from `mlx-community`).
+*   Downloaded models are typically cached in your Hugging Face cache directory (e.g., `~/.cache/huggingface/hub`).
+*   Ensure your `.gitignore` (specifically the `models/` entry) is correctly configured to prevent these large downloaded model files from being committed to the repository.

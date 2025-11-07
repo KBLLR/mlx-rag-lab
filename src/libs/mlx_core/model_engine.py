@@ -13,7 +13,7 @@ class MLXModelEngine:
 
     def _load_model(self, **kwargs: Any) -> None:
         if self.model_type == "text":
-            self.model, self.tokenizer = load(self.model_id, legacy=False, **kwargs)
+            self.model, self.tokenizer = load(self.model_id, **kwargs)
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
 

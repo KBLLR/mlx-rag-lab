@@ -31,37 +31,94 @@ You can swap these for any MLX-supported embedding + LLM pair with minimal chang
 
 ## Repository layout
 
+
+
 This repo is intentionally structured so tools (and humans) know where to look:
 
+
+
 ```txt
+
 mlx-RAG/
+
   docs/                # High-level documentation (this README, architecture notes, etc.)
+
   .gemini/             # AI assistant / MCP configuration (optional, tool-specific)
+
   src/
+
     rag/               # Core RAG package (Python)
+
       config/          # RAG config files (model paths, index locations, etc.)
+
       ingestion/       # PDF/text ingestion & vector DB building
+
       retrieval/       # Vector DB, similarity search, query strategies
+
       models/          # Model wrappers & MLX integration
+
       cli/             # Command-line entrypoints
+
     libs/
+
       mlx_core/        # Thin adapters around MLX / MLX-LM / model helpers
+
       utils/           # Shared utilities (logging, I/O, misc helpers)
+
   models/
+
     mlx-models/        # Local model folders (LLMs, encoders) in MLX format
+
     embeddings/        # Embedding artifacts (e.g. GTE NPZ files)
+
     indexes/           # Vector DB index files (e.g. vdb.npz)
+
     lora/              # LoRA datasets & training artefacts
+
   apps/
+
     ios/               # iOS / vision / RAG clients
+
     macos/             # macOS-specific apps
+
     ui-components/     # Shared UI building blocks
+
   third_party/         # Vendored libraries & external projects
+
   experiments/         # Prototypes, sandboxes, scratch experiments
+
   var/
+
     logs/              # Local logs (ignored in VCS)
+
     outputs/           # Generated outputs / artifacts
+
+    source_docs/       # Local PDF documents for ingestion (ignored in VCS)
+
   config/              # Environment & dependency configuration
+
   pyproject.toml       # Canonical Python project definition (managed by uv)
+
   uv.lock              # Locked dependency versions
+
   LICENSE
+
+```
+
+
+
+### Key Documentation Files
+
+
+
+*   [`docs/SITEMAP.md`](docs/SITEMAP.md): A human-friendly overview of the repository structure.
+
+*   [`docs/DEVELOPMENT_GUIDELINES.md`](docs/DEVELOPMENT_GUIDELINES.md): Comprehensive guidelines for development practices, artifact management, and release procedures.
+
+*   [`docs/AUDIT-log.md`](docs/AUDIT-log.md): Checklist and criteria for assessing the project's "good state."
+
+*   [`docs/tasks.md`](docs/tasks.md): A ledger for tracking all project tasks and their status.
+
+
+
+
