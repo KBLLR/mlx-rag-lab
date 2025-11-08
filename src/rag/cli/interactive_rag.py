@@ -11,7 +11,7 @@ from pathlib import Path
 from rag.retrieval.vdb import VectorDB
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.ingestion.create_vdb import process_pdfs
-from rag.models.cross_encoder import CrossEncoder
+from rag.models.qwen_reranker import QwenReranker
 import json
 
 # --- Configuration ---
@@ -60,9 +60,9 @@ class InteractiveRAG:
             self.model_engine = MLXModelEngine(self.model_id, model_type="text")
             progress.update(task2, advance=1, description="[green]LLM loaded.")
 
-            task3 = progress.add_task("Loading Cross-Encoder...", total=1)
-            self.cross_encoder = CrossEncoder('mlx-community/mxbai-rerank-large-v2')
-            progress.update(task3, advance=1, description="[green]Cross-Encoder loaded.")
+            task3 = progress.add_task("Loading Reranker (Qwen2)...", total=1)
+            self.cross_encoder = QwenReranker("mlx-community/mxbai-rerank-large-v2")
+            progress.update(task3, advance=1, description="[green]Reranker loaded.")
 
     def rebuild_vdb(self):
         console.print(f"[bold cyan]Rebuilding VectorDB from PDFs in {SOURCE_DOCS_DIR}...[/bold cyan]")

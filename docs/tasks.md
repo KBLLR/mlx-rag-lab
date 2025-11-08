@@ -23,7 +23,7 @@ Track all work for the `mlx-RAG` project here. Keep the table **sorted by priori
 |----|-------|--------------|----------|-------|
 
 ## Done
-| ID | Title | Completed (YYYY-MM-DD) | Outcome |
-|----|-------|------------------------|---------|
-
+| ID    | Title                                            | Completed (YYYY-MM-DD) | Outcome |
+|-------|--------------------------------------------------|------------------------|---------|
+| RAG-013 | Implement Cross-Encoder Re-ranking               | 2025-11-07             | Implemented Qwen2-based reranker using mlx_lm. |
 > Add/remove columns if needed, but keep the section order (Backlog → In Progress → Review/QA → Done) so other agents/tools can parse it.

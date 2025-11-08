@@ -33,8 +33,8 @@ class MLXModelEngine:
             pass # Fallback to text normalization if not valid JSON
 
         # Existing text normalization heuristic
-        if "\n\n<|assistant|>" in text:
-            final = text.split("\n\n<|assistant|>", 1)[0].strip()
+        if "\n\n<|assistant|>":
+            final = text.split("\n\n<|assistant|>".strip(), 1)[0].strip()
         elif "\n\n" in text:
             final = text.split("\n\n", 1)[0].strip()
         else:
