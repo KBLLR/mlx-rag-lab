@@ -1,0 +1,22 @@
+# .github/CODEOWNERS
+#
+# This file specifies the individuals or teams that are responsible for code in a repository.
+# When someone opens a pull request that modifies code owned by a CODEOWNERS entry,
+# the designated code owners are automatically requested for review.
+#
+# For more information, see: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default code owners for the entire repository
+* @davidcaballero # Assuming 'davidcaballero' is the primary owner
+
+# Specific owners for core RAG logic
+/src/rag/ @davidcaballero
+
+# Specific owners for libraries
+/src/libs/ @davidcaballero
+
+# Specific owners for documentation
+/docs/ @davidcaballero
+
+# Specific owners for tests
+/tests/ @davidcaballero

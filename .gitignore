@@ -30,6 +30,14 @@ nanobanana-output/
 
 # Entire models directory (all contents should be local)
 models/
+mlx-models/all-MiniLM-L6-v2/
+mlx-models/encodec-32khz-float32/
+mlx-models/llasa-3b-Q4-mlx/
+mlx-models/musicgen-small/
+mlx-models/Phi-3-Vision-MLX/
+mlx-models/t5/
+mlx-models/whisper/
+mlx-models/cross-encoder-ms-marco-MiniLM-L-6-v2/
 
 # Specific directories to keep local (as per user instruction and inferred from directory listing)
 KBLLR_face_MCKP/
@@ -38,7 +46,7 @@ flux/
 glitchVHS-main/
 lora/
 LoRATraining/
-musicgen/
+mlx-models/all-MiniLM-L6-v2
 segment_anything/
 speechcommands/
 StableDiffusion/

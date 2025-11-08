@@ -20,7 +20,8 @@ dependencies = [
   "rich~=13.7.1",                    # Rich text and beautiful formatting in the terminal
   "numpy>=1.26",
   "tqdm>=4.66",
-  "requests>=2.32"
+  "requests>=2.32",
+  "soundfile>=0.12.1" # Required for saving audio files
 ]
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
@@ -69,4 +70,30 @@ packages = [
     "libs",
     "libs.mlx_core",
     "libs.utils",
+    "libs.musicgen_core", # Added musicgen_core
+    "libs.ollama_core", # Added ollama_core
 ]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "W", "F", "I", "B", "C4"] # Common linting rules
+ignore = ["E501"] # Ignore line length, handled by black
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
