@@ -27,6 +27,10 @@ dependencies = [
   "sentencepiece",
   "datasets",
   "mlx-data>=0.2.0",
+  "tiktoken>=0.5.1", # OpenAI tokenizer for Whisper
+  "more-itertools>=9.0", # Utilities for Whisper
+  "numba>=0.58", # JIT compilation for audio processing
+  "scipy>=1.11", # Scientific computing for audio
 ]
 
 [project.scripts]
@@ -34,6 +38,7 @@ rag-cli = "rag.cli.entrypoints:rag_cli_main"
 flux-cli = "rag.cli.entrypoints:flux_cli_main"
 bench-cli = "rag.cli.entrypoints:bench_cli_main"
 musicgen-cli = "rag.cli.entrypoints:musicgen_cli_main"
+whisper-cli = "rag.cli.entrypoints:whisper_cli_main"
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
 [project.optional-dependencies]
