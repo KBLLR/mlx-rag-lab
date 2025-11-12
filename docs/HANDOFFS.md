@@ -65,3 +65,24 @@
 **Notes**
 - `tests/conftest.py` now prepends `src`, so helper tests import `rag.cli.flux_txt2image` and stubbed `rag.models.flux` instead of pulling real MLX modules.
 - The archived Textual `rag_tui` lives under `archive/tui/rag_tui.py`; day-to-day experimentation should stay with the new `apps/` CLIs.
+
+=========================
+Next Agent Task List
+=========================
+
+1. Run full CLI suite on a Metal-ready Mac:
+   - `uv run rag-cli --help`
+   - `uv run flux-cli --prompt "lab smoke test" --steps 1 --image-size 256`
+   - `uv run bench-cli flux --help`
+   These are expected to work as entrypoints; MLX/Metal failures during actual model load are still acceptable and documented.
+
+2. Decide long-term fate of Flux extras & benchmarks:
+   - Either keep `benchmarks/` and `src/rag/cli/flux*.py` as first-class lab components, or move them into `archive/` if they’re legacy.
+   - Update `docs/COMMANDS_MANIFEST.md` if any CLIs or flows become “official.”
+
+3. Gradually expand stub-friendly test coverage:
+   - Extend `tests/cli/` and `tests/flux/` to cover argument parsing, registry/manifest helpers, and basic RAG wiring without instantiating MLX/Metal.
+
+4. Revisit MLX / Metal stability later:
+   - On a GPU-backed Mac, attempt a minimal `rag-cli` query that actually builds a VectorDB.
+   - If NSRangeException still happens first, update `docs/LAB_STATUS.md` and `docs/HANDOFFS.md` only; do not try to paper over Metal issues in this repo.
