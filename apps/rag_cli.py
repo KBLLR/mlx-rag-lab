@@ -1,5 +1,8 @@
 import argparse
+import gc
 import json
+import signal
+import sys
 from pathlib import Path
 from textwrap import shorten
 
@@ -11,6 +14,11 @@ from rag.retrieval.vdb import VectorDB
 DEFAULT_VDB_PATH = Path("models/indexes/vdb.npz")
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
 DEFAULT_RERANKER_ID = "mlx-community/mxbai-rerank-large-v2"
+
+# Global references for cleanup
+_model_engine = None
+_reranker = None
+_vdb = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,22 +84,58 @@ def build_prompt(context: str, question: str) -> str:
     )
 
 
+def cleanup_handler(signum, frame):
+    """Handle Ctrl+C gracefully by cleaning up MLX resources and multiprocessing."""
+    global _model_engine, _reranker, _vdb
+
+    print("\n\n🧹 Cleaning up resources...")
+
+    # Delete MLX models to free GPU/unified memory
+    if _model_engine is not None:
+        del _model_engine
+        _model_engine = None
+
+    if _reranker is not None:
+        del _reranker
+        _reranker = None
+
+    if _vdb is not None:
+        del _vdb
+        _vdb = None
+
+    # Force garbage collection to release memory
+    gc.collect()
+
+    print("✅ Cleanup complete. Bye.\n")
+    sys.exit(0)
+
+
 def main() -> None:
+    global _model_engine, _reranker, _vdb
+
+    # Register signal handler for graceful Ctrl+C cleanup
+    signal.signal(signal.SIGINT, cleanup_handler)
+
     args = build_parser().parse_args()
-    vdb = VectorDB(str(args.vdb_path))
+    _vdb = VectorDB(str(args.vdb_path))
 
     # Make reranker optional to avoid timeouts/semaphore leaks
     if args.no_reranker:
-        reranker = None
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(vdb.content)} chunks)")
+        _reranker = None
+        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
         print(f"Using model {args.model_id} (reranker disabled)")
     else:
-        reranker = QwenReranker(args.reranker_id)
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(vdb.content)} chunks)")
+        _reranker = QwenReranker(args.reranker_id)
+        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
         print(f"Using model {args.model_id} and reranker {args.reranker_id}")
 
-    model_engine = MLXModelEngine(args.model_id, model_type="text")
+    _model_engine = MLXModelEngine(args.model_id, model_type="text")
     print("\nType a question (Ctrl+C to exit):\n")
+
+    # Use local references for the loop
+    vdb = _vdb
+    reranker = _reranker
+    model_engine = _model_engine
 
     while True:
         try:
