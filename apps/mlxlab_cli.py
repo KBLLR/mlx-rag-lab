@@ -57,7 +57,7 @@ PIPELINES = {
     },
 }
 
-# Correct model names with -mlx suffix
+# Correct model names with real available models
 MODELS = {
     "whisper": {
         "full": [
@@ -74,20 +74,25 @@ MODELS = {
             ("mlx-community/whisper-base.en-mlx", "~74MB", "English-only, faster"),
             ("mlx-community/whisper-small.en-mlx", "~244MB", "English-only, faster"),
         ],
-        "quantized": [
-            "4-bit (smaller, faster, slight quality loss)",
-            "8-bit (good balance)",
-            "2-bit (smallest, lowest quality)",
-        ],
     },
-    "musicgen": [("facebook/musicgen-small", "5.4GB", "Meta's text-to-audio model")],
+    "musicgen": [
+        ("facebook/musicgen-small", "~1.2GB", "300M params, fast generation"),
+        ("facebook/musicgen-medium", "~4GB", "1.5B params, better quality"),
+        ("facebook/musicgen-large", "~8GB", "3.3B params, best quality"),
+        ("facebook/musicgen-melody", "~4GB", "Melody conditioning support"),
+        ("facebook/musicgen-stereo-small", "~1.2GB", "Stereo output"),
+        ("facebook/musicgen-stereo-medium", "~4GB", "Stereo output, better quality"),
+        ("facebook/musicgen-stereo-large", "~8GB", "Stereo output, best quality"),
+    ],
     "flux": [
-        ("schnell", "23GB", "Fast generation"),
-        ("dev", "23GB", "Higher quality"),
+        ("argmaxinc/mlx-FLUX.1-schnell", "~23GB", "Fast, 4-step generation"),
+        ("argmaxinc/mlx-FLUX.1-schnell-4bit-quantized", "~6GB", "4-bit quantized, 75% smaller"),
+        ("argmaxinc/mlx-FLUX.1-dev", "~23GB", "High quality, 20-50 steps"),
     ],
     "rag": [
-        ("Phi-3-mini-4k-instruct-4bit", "", "Quantized LLM"),
-        ("mxbai-rerank-large-v2", "", "Cross-encoder reranker"),
+        ("mlx-community/Phi-3-mini-4k-instruct-4bit", "~2.4GB", "Quantized LLM"),
+        ("mlx-community/mxbai-rerank-large-v2", "~1.2GB", "Cross-encoder reranker"),
+        ("mlx-community/Llama-3.2-3B-Instruct-4bit", "~1.9GB", "Alternative LLM"),
     ],
 }
 
@@ -131,6 +136,16 @@ def get_cache_info():
     except Exception as e:
         console.print(f"[yellow]Could not scan cache: {e}[/yellow]")
         return None
+
+
+def is_model_cached(model_id: str) -> bool:
+    """Check if a model is already cached."""
+    cache_info = get_cache_info()
+    if not cache_info:
+        return False
+
+    cached_repos = [repo.repo_id for repo in cache_info.repos]
+    return model_id in cached_repos
 
 
 def show_cache_info():
@@ -247,8 +262,10 @@ def delete_cached_models():
 
 
 def download_model():
-    """Interactive model download with progress."""
-    console.print("\n[bold cyan]📥 Download Model[/bold cyan]\n")
+    """Interactive model download with progress and cache detection."""
+    console.print("
+[bold cyan]📥 Download Model[/bold cyan]
+")
 
     # Select pipeline
     pipeline_choice = inquirer.select(
@@ -256,9 +273,13 @@ def download_model():
         choices=[
             Choice("whisper", name="Whisper - Speech-to-Text"),
             Choice("musicgen", name="MusicGen - Audio Generation"),
+            Choice("flux", name="Flux - Image Generation"),
+            Choice("rag", name="RAG - Language Models"),
         ],
         default="whisper",
     ).execute()
+
+    model_id = None
 
     if pipeline_choice == "whisper":
         # Select category
@@ -271,11 +292,14 @@ def download_model():
             default="full",
         ).execute()
 
-        # Select specific model
-        model_choices = [
-            Choice(model[0], name=f"{model[0].split('/')[-1]} - {model[1]} - {model[2]}")
-            for model in MODELS["whisper"][category]
-        ]
+        # Select specific model with cache status
+        model_choices = []
+        for model, size, desc in MODELS["whisper"][category]:
+            cached = is_model_cached(model)
+            status = " ✓ Downloaded" if cached else ""
+            model_choices.append(
+                Choice(model, name=f"{model.split('/')[-1]} - {size} - {desc}{status}")
+            )
 
         model_id = inquirer.select(
             message="Select model to download:",
@@ -283,10 +307,73 @@ def download_model():
         ).execute()
 
     elif pipeline_choice == "musicgen":
-        model_id = "facebook/musicgen-small"
+        # MusicGen models
+        model_choices = []
+        for model, size, desc in MODELS["musicgen"]:
+            cached = is_model_cached(model)
+            status = " ✓ Downloaded" if cached else ""
+            model_choices.append(
+                Choice(model, name=f"{model.split('/')[-1]} - {size} - {desc}{status}")
+            )
 
-    console.print(f"\n[bold]Downloading: {model_id}[/bold]\n")
-    console.print("[dim]This will download the model to ~/.cache/huggingface/hub[/dim]\n")
+        model_id = inquirer.select(
+            message="Select MusicGen model:",
+            choices=model_choices,
+        ).execute()
+
+    elif pipeline_choice == "flux":
+        # Flux models
+        model_choices = []
+        for model, size, desc in MODELS["flux"]:
+            cached = is_model_cached(model)
+            status = " ✓ Downloaded" if cached else ""
+            model_choices.append(
+                Choice(model, name=f"{model.split('/')[-1]} - {size} - {desc}{status}")
+            )
+
+        model_id = inquirer.select(
+            message="Select Flux model:",
+            choices=model_choices,
+        ).execute()
+
+    elif pipeline_choice == "rag":
+        # RAG models
+        model_choices = []
+        for model, size, desc in MODELS["rag"]:
+            cached = is_model_cached(model)
+            status = " ✓ Downloaded" if cached else ""
+            model_choices.append(
+                Choice(model, name=f"{model.split('/')[-1]} - {size} - {desc}{status}")
+            )
+
+        model_id = inquirer.select(
+            message="Select RAG model:",
+            choices=model_choices,
+        ).execute()
+
+    if model_id is None:
+        input("
+[dim]Press Enter to continue...[/dim]")
+        return
+
+    # Check if already cached
+    if is_model_cached(model_id):
+        console.print(f"
+[yellow]⚠️  Model already downloaded: {model_id}[/yellow]")
+        redownload = inquirer.confirm(
+            message="Re-download anyway?",
+            default=False,
+        ).execute()
+        if not redownload:
+            input("
+[dim]Press Enter to continue...[/dim]")
+            return
+
+    console.print(f"
+[bold]Downloading: {model_id}[/bold]
+")
+    console.print("[dim]This will download the model to ~/.cache/huggingface/hub[/dim]
+")
 
     confirm = inquirer.confirm(
         message="Start download?",
@@ -306,11 +393,14 @@ def download_model():
 
                 snapshot_download(repo_id=model_id, cache_dir=None)
                 progress.update(task, completed=True)
-                console.print(f"\n[green]✓ Downloaded {model_id}[/green]")
+                console.print(f"
+[green]✓ Downloaded {model_id}[/green]")
             except Exception as e:
-                console.print(f"\n[red]✗ Download failed: {e}[/red]")
+                console.print(f"
+[red]✗ Download failed: {e}[/red]")
 
-    input("\n[dim]Press Enter to continue...[/dim]")
+    input("
+[dim]Press Enter to continue...[/dim]")
 
 
 def show_models_menu():
