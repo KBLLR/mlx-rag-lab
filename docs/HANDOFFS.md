@@ -151,3 +151,6 @@ Next Agent Task List
 **Commits**
 - `08f33aa` — chore: normalize GitHub username and finalize Echo handoff
 - `af23dfd` — feat(rag): make reranker optional + add usability docs
+- `91851bb` — docs: add Rhyme handoff entry (usability + MLX alignment)
+- `fa9e284` — feat: upgrade to Python 3.13.9 with full MLX ecosystem support
+- `80b2030` — merge: Python 3.13 upgrade to main (all tests passing)
