@@ -31,9 +31,11 @@ dependencies = [
   "more-itertools>=9.0", # Utilities for Whisper
   "numba>=0.58", # JIT compilation for audio processing
   "scipy>=1.11", # Scientific computing for audio
+  "InquirerPy>=0.3.4", # Interactive CLI prompts for mlxlab
 ]
 
 [project.scripts]
+mlxlab = "rag.cli.entrypoints:mlxlab_main"
 rag-cli = "rag.cli.entrypoints:rag_cli_main"
 flux-cli = "rag.cli.entrypoints:flux_cli_main"
 bench-cli = "rag.cli.entrypoints:bench_cli_main"
