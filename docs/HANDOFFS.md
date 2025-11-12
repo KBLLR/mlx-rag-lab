@@ -86,3 +86,17 @@ Next Agent Task List
 4. Revisit MLX / Metal stability later:
    - On a GPU-backed Mac, attempt a minimal `rag-cli` query that actually builds a VectorDB.
    - If NSRangeException still happens first, update `docs/LAB_STATUS.md` and `docs/HANDOFFS.md` only; do not try to paper over Metal issues in this repo.
+
+#### Final Git status
+
+- **Current branch:** `main` (clean, in sync with `origin/main`). No changes were made to `main` in this session.
+- **New branch created:** `rag-v0.1-lab`, branched from the rollback snapshot at `4865e01`.
+- **Committed scope on `rag-v0.1-lab`:**
+  - Updated RAG backlog (RAG-013–RAG-017) to define the **RAG v0.1** milestone.
+  - Added the RAG v0.1 milestone section to `docs/projects/mlx-rag-setup/README.md`.
+  - Updated `docs/open-tasks.md` to mirror the refined RAG tasks and the new data-pipeline item.
+  - Added `MDP-009` to `docs/projects/mlx-data-pipeline/tasks.md` (shared ingestion/VDB schema).
+  - Created and wired the rollback-reflection project under `docs/projects/rollback-reflection/`.
+  - Recorded the rollback session in `docs/HANDOFFS.md`.
+- **Remote state:** `rag-v0.1-lab` has been pushed and now tracks `origin/rag-v0.1-lab` as the MLX-first RAG v0.1 planning snapshot.
+- **Local-only artifacts:** untracked assets such as `mlx-models/*` and `outputs/` remain on disk only and were not staged or committed.

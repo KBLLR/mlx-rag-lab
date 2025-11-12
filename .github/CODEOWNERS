@@ -7,16 +7,16 @@
 # For more information, see: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Default code owners for the entire repository
-* @davidcaballero # Assuming 'davidcaballero' is the primary owner
+* @kbllr # Assuming 'kbllr' is the primary owner
 
 # Specific owners for core RAG logic
-/src/rag/ @davidcaballero
+/src/rag/ @kbllr
 
 # Specific owners for libraries
-/src/libs/ @davidcaballero
+/src/libs/ @kbllr
 
 # Specific owners for documentation
-/docs/ @davidcaballero
+/docs/ @kbllr
 
 # Specific owners for tests
-/tests/ @davidcaballero
+/tests/ @kbllr
