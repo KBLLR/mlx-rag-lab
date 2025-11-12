@@ -32,6 +32,13 @@ nanobanana-output/
 !/mlx-models/manifests/
 !/mlx-models/manifests/**
 
+# Generated outputs + manifests/backups
+outputs/
+mlx-models/manifests/
+*.bak
+*.tmp
+benchmarks/traces/
+
 # Entire models directory (all contents should be local)
 models/
 mlx-models/all-MiniLM-L6-v2/
