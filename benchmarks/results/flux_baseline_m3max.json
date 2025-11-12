@@ -1,0 +1,52 @@
+{
+  "tag": "m3-max-36gb-baseline",
+  "timestamp": 1762777295.0588832,
+  "hardware_note": "arm64",
+  "models_dir": "/Users/davidcaballero/mlx-RAG/mlx-models",
+  "runs": [
+    {
+      "model": "schnell",
+      "steps": 8,
+      "n_images": 1,
+      "image_size": 512,
+      "repeats": 3,
+      "warmup": 1,
+      "latency": {
+        "mean_s": 47.33807058329694,
+        "std_s": 4.016282461489144,
+        "p50_s": 47.18580291699618,
+        "p90_s": 51.30224688332528,
+        "min_s": 42.497050957987085,
+        "max_s": 52.33135787490755,
+        "images_per_second": 0.021124646350771343
+      },
+      "peak_memory_mb": {
+        "mean": 4206.256666666667,
+        "max": 4337.17,
+        "min": 4140.8
+      }
+    },
+    {
+      "model": "dev",
+      "steps": 8,
+      "n_images": 1,
+      "image_size": 512,
+      "repeats": 3,
+      "warmup": 1,
+      "latency": {
+        "mean_s": 598.6533082639799,
+        "std_s": 43.604095053604965,
+        "p50_s": 582.353529416956,
+        "p90_s": 643.1168643834069,
+        "min_s": 555.2986972499639,
+        "max_s": 658.3076981250197,
+        "images_per_second": 0.0016704158921294124
+      },
+      "peak_memory_mb": {
+        "mean": 3388.6233333333334,
+        "max": 3417.52,
+        "min": 3330.83
+      }
+    }
+  ]
+}
