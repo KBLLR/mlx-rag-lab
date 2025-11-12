@@ -2,7 +2,9 @@
 
 This doc describes what works reliably today, what depends on a friendly Metal/MLX environment, and what is still experimental.
 
--## Stable / Working
+> **📋 See also**: [`docs/USABILITY.md`](./USABILITY.md) for detailed testing results and quick health checks.
+
+## Stable / Working
 
 - macOS + Python 3.12 CI installs dependencies via `uv sync` (the workflow now runs on `macos-15`).
 - CLI entry points `rag-cli`, `flux-cli`, and `bench-cli` are wired via `[project.scripts]` and the shim in `src/rag/cli/entrypoints.py`; running `uv run rag-cli --help` works on macOS.
@@ -14,7 +16,8 @@ This doc describes what works reliably today, what depends on a friendly Metal/M
 
 ## Working, but environment-sensitive
 
-- Running `rag-cli` with real MLX models touches Metal (NSRangeException risk on some machines). Start with `--help` or stubbed inputs before letting long prompts load models.
+- **RAG CLI with reranker**: The Qwen reranker (`mlx-community/mxbai-rerank-large-v2`) may timeout or cause semaphore leaks. **Workaround**: Use `--no-reranker` flag to skip reranking (raw VectorDB scores work fine).
+- **RAG CLI without reranker**: Works reliably for querying local VectorDBs with MLX-based LLMs (tested with Phi-3).
 - `flux-cli` still relies on the full Flux pipeline (Metal-heavy). Keep prompts small or run on a known-good Mac GPU.
 - Any other MLX-backed RAG / VectorDB flows that instantiate the model engine will hit the same hardware sensitivities; the CLI path surfaces the issue rather than hiding it.
 

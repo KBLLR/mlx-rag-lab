@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=512,
         help="Max tokens for the MLX text model.",
     )
+    parser.add_argument(
+        "--no-reranker",
+        action="store_true",
+        help="Skip reranking step (use raw VectorDB scores).",
+    )
     return parser
 
 
@@ -74,11 +79,18 @@ def build_prompt(context: str, question: str) -> str:
 def main() -> None:
     args = build_parser().parse_args()
     vdb = VectorDB(str(args.vdb_path))
-    reranker = QwenReranker(args.reranker_id)
-    model_engine = MLXModelEngine(args.model_id, model_type="text")
 
-    print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(vdb.content)} chunks)")
-    print(f"Using model {args.model_id} and reranker {args.reranker_id}")
+    # Make reranker optional to avoid timeouts/semaphore leaks
+    if args.no_reranker:
+        reranker = None
+        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(vdb.content)} chunks)")
+        print(f"Using model {args.model_id} (reranker disabled)")
+    else:
+        reranker = QwenReranker(args.reranker_id)
+        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(vdb.content)} chunks)")
+        print(f"Using model {args.model_id} and reranker {args.reranker_id}")
+
+    model_engine = MLXModelEngine(args.model_id, model_type="text")
     print("\nType a question (Ctrl+C to exit):\n")
 
     while True:
@@ -96,9 +108,14 @@ def main() -> None:
             print("[!] No documents retrieved for that question.")
             continue
 
-        candidate_texts = [chunk["text"] for chunk in retrieved]
-        ranks = reranker.rank(question, candidate_texts)
-        selected = [retrieved[idx] for idx in ranks[: args.top_k]]
+        # Rerank if enabled, otherwise use raw VectorDB scores
+        if reranker is not None:
+            candidate_texts = [chunk["text"] for chunk in retrieved]
+            ranks = reranker.rank(question, candidate_texts)
+            selected = [retrieved[idx] for idx in ranks[: args.top_k]]
+        else:
+            selected = retrieved[: args.top_k]
+
         context, summary = format_context(selected)
         prompt = build_prompt(context, question)
 
