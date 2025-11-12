@@ -6,6 +6,17 @@ This document provides comprehensive instructions for setting up, installing dep
 
 `mlx-RAG` is a local-first Retrieval-Augmented Generation (RAG) system built on Apple Silicon using the MLX framework. It allows users to ingest documents, create a local vector database with MLX-based embeddings, and query it using a local MLX-powered Large Language Model (LLM).
 
+## RAG v0.1 Milestone
+
+The first milestone focuses on proving a stable, fully local workflow. RAG v0.1 will:
+- **RAG-013** – persist chunk-level source metadata and surface citations in answers.
+- **RAG-014** – define a native MLX reranker interface powered by MLX LMs (e.g., Qwen/mxbai).
+- **RAG-015** – replace the legacy CrossEncoder references in `interactive_rag` with the new MLX reranker.
+- **RAG-016** – document a reliable smoke scenario (sample corpus + `create_vdb` + `interactive_rag`) that runs on a single Apple Silicon machine.
+- **RAG-017** – add minimal VectorDB save/load + ranking tests that avoid heavy ML downloads or Metal requirements.
+
+See RAG-013 / RAG-014 / RAG-015 / RAG-016 / RAG-017 in `tasks.md` for the canonical wording and status of each work item.
+
 ## 2. Prerequisites
 
 Before you begin, ensure you have the following:
