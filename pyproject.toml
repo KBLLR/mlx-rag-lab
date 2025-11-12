@@ -10,19 +10,29 @@ authors = [
 
 # Core runtime for src/rag (no toys, only what production RAG needs)
 dependencies = [
-  "mlx~=0.29.3",                     # Apple MLX: array / nn framework  [oai_citation:3‡PyPI](https://pypi.org/project/mlx/)
-  "mlx-lm",                          # LLM wrapper on top of MLX  [oai_citation:4‡GitHub](https://github.com/ml-explore/mlx-lm)
-  "huggingface-hub~=0.34.0",          # model / weights from HF Hub  [oai_citation:5‡PyPI](https://pypi.org/project/huggingface-hub/?utm_source=chatgpt.com)
-  "transformers~=4.57.1",            # tokenizers + model configs (BERT, etc.)  [oai_citation:6‡PyPI](https://pypi.org/project/transformers/?utm_source=chatgpt.com)
-  "unstructured[pdf]~=0.18.15",      # PDF partitioning for ingestion
-  "pydantic~=2.12.3",                # config / validation layer
-  "typer[all]~=0.12.3",              # CLI application framework
-  "rich~=13.7.1",                    # Rich text and beautiful formatting in the terminal
+  "mlx~=0.29.3", # Apple MLX: array / nn framework  [oai_citation:3‡PyPI](https://pypi.org/project/mlx/)
+  "mlx-lm", # LLM wrapper on top of MLX  [oai_citation:4‡GitHub](https://github.com/ml-explore/mlx-lm)
+  "huggingface-hub~=0.34.0", # model / weights from HF Hub  [oai_citation:5‡PyPI](https://pypi.org/project/huggingface-hub/?utm_source=chatgpt.com)
+  "transformers~=4.57.1", # tokenizers + model configs (BERT, etc.)  [oai_citation:6‡PyPI](https://pypi.org/project/transformers/?utm_source=chatgpt.com)
+  "unstructured[pdf]~=0.18.15", # PDF partitioning for ingestion
+  "pydantic~=2.12.3", # config / validation layer
+  "typer~=0.12.3", # CLI application framework
+  "rich~=13.7.1", # Rich text and beautiful formatting in the terminal
   "numpy>=1.26",
   "tqdm>=4.66",
   "requests>=2.32",
-  "soundfile>=0.12.1" # Required for saving audio files
+  "soundfile>=0.12.1", # Required for saving audio files
+  "regex",
+  "Pillow",
+  "sentencepiece",
+  "datasets",
+  "mlx-data>=0.2.0",
 ]
+
+[project.scripts]
+rag-cli = "apps.rag_cli:main"
+flux-cli = "apps.flux_cli:main"
+bench-cli = "apps.bench_cli:main"
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
 [project.optional-dependencies]
@@ -67,11 +77,13 @@ packages = [
     "rag.retrieval",
     "rag.models",
     "rag.cli",
+    "apps",
     "libs",
     "libs.mlx_core",
     "libs.utils",
     "libs.musicgen_core", # Added musicgen_core
     "libs.ollama_core", # Added ollama_core
+    "rag.models.flux",
 ]
 
 [tool.ruff]
@@ -96,4 +108,3 @@ exclude = '''
   | dist
 )/
 '''
-

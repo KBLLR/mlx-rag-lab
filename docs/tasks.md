@@ -1,51 +1,41 @@
 # Task Ledger for mlx-RAG
 
-Track all work for the `mlx-RAG` project here. Keep the table **sorted by priority** (top = highest).
+Track every task for this experimental MLX lab. Keep sections grouped by focus area and prioritize rows within each table (top = highest).
 
-## Backlog
-| ID    | Title                                            | Description                                                   | Priority | Owner | Notes                                                  |
-|-------|--------------------------------------------------|---------------------------------------------------------------|----------|-------|--------------------------------------------------------|
-| RAG-001 | Implement AudioSTTManager                        | Integrate MLX Whisper for speech-to-text functionality.       | High     |       |                                                        |
-| HYG-001 | Create Repo Hygiene Project Template             | Duplicate project template for best practices for public repos. | High     |       | Includes License, README, CONTRIBUTING, CODEOWNERS, SECURITY, CHANGELOG, GITIGNORE, CI/CD, DOCS, LICENSING, CODESTYLE, TESTING, SECRETS, DATA, LOCALDEV. |
-| RAG-002 | Implement VoiceOutputManager                     | Integrate MLX Llasa for text-to-speech/speech-to-speech.      | High     |       | Requires research on Llasa API.                        |
-| RAG-003 | Create RAG Orchestrator                          | Develop a module to coordinate STT, VDB query, and LLM gen.   | High     |       |                                                        |
-| RAG-004 | Enhance User Experience for Interactive CLI      | Improve input parsing, error messages, and output formatting. | Medium   |       | Consider rich library for better terminal experience.  |
-| RAG-005 | Implement Hybrid Retrieval Strategy              | Combine vector search with keyword-based search.              | Medium   |       | Requires changes in `VectorDB.query`.                  |
-| RAG-006 | Improve JSON Output Grounding & Citations        | Ensure LLM strictly adheres to JSON format and accurate citing. | Medium   |       | May require prompt engineering and/or `outlines` integration. |
-| RAG-007 | Integrate Vision Models (mlx-vlm)                | Add support for multi-modal queries with image inputs.        | Low      |       | Requires `mlx-vlm` installation and `MLXModelEngine` updates. |
-| RAG-008 | Implement Speculative Decoding (optional)        | Integrate a draft model for faster generation.                | Low      |       | Requires a working draft model and `mlx-lm` support.   |
-| MG-009  | Add property & API tests for EncodecModel        | Test EncodecModel.from_pretrained, properties, and round-trip encode/decode. | High     |       |                                                        |
-| MG-010  | Add stricter MusicgenAdapter tests               | Extend tests for duration, prompts, and invalid inputs.       | High     |       |                                                        |
-| MG-011  | Add regression test for Encodec drift            | Ensure EncodecModel.decode signatures match expected contract. | Medium   |       |                                                        |
-| MG-012  | Document Musicgen duration semantics             | Explicitly document 50 steps/sec rule and provide examples.   | Medium   |       |                                                        |
-| MG-013  | Create Musicgen CLI / script entrypoint          | Develop a CLI for MusicgenAdapter with various arguments.     | Medium   |       |                                                        |
-| MG-014  | Expose Musicgen model choices via config         | Implement config/env-based selection for model sizes.         | Low      |       | Optional: add benchmark script.                        |
-| MG-015  | Track MLX upstream for stereo & melody support   | Monitor MLX for stereo/melody variants and plan integration.  | Low      |       |                                                        |
-| MG-016  | Define Musicgen model caching & download strategy| Document model storage, check/download utility.               | Low      |       |                                                        |
-| MG-017  | Define RAG / system integration hooks            | Create AudioGenerator interface for MusicgenAdapter.          | Low      |       |                                                        |
-| MG-018  | Define Musicgen Configuration Schema             | Create Python dataclass/Pydantic model for Musicgen config (model, generation, prompt). | High     |       |                                                        |
-| MG-019  | Implement Musicgen Preset Loading                | Develop logic to load and merge default, style, role, and quality presets. | High     |       |                                                        |
-| MG-020  | Refactor MusicgenAdapter for Config              | Update MusicgenAdapter to accept and utilize the new configuration object. | High     |       |                                                        |
-| MG-021  | Implement Musicgen CLI Entrypoint                | Create a CLI command (e.g., `rag musicgen generate`) using the adapter and config. | Medium   |       |                                                        |
-| MG-022  | Integrate Musicgen into RAG Output Flow (Basic)  | Develop a basic flow for RAG answer to trigger Musicgen background track. | Medium   |       |                                                        |
-| MG-023  | Implement Loudness Normalization                 | Add optional loudness normalization step in MusicgenAdapter or utils.py. | Low      |       |                                                        |
-| MG-024  | Document Musicgen Configuration & Presets        | Create detailed documentation for Musicgen config schema and presets. | Low      |       |                                                        |
-| MG-025  | Explore Two-Step CFG (Stub)                      | Add placeholder or initial investigation for `two_step_cfg`.  | Low      |       |                                                        |
-| MG-026  | Implement Prompt Reflection Logging              | Log Musicgen generation details for future RAG context.       | Low      |       |                                                        |
-| MG-027  | Design Music Catalog Metadata Schema             | Define schema for storing generated tracks with structured metadata. | Low      |       |                                                        |
+## Repo shape
+| ID | Title | Description | Priority | Owner | Notes |
+|----|-------|-------------|----------|-------|-------|
+| RS-01 | Create apps/ directory | Consolidate runtime CLIs under `apps/` and treat every entry point as a focused script. | High | | |
+| RS-02 | Archive Textual/TUI code | Move `src/rag/cli/rag_tui.py` (and any UI-only modules) into `archive/tui/` so the working tree stays CLI-first. | High | | |
+| RS-03 | Drop TUI-only dependencies | Remove `textual` from production deps and trim lockfiles so the lab stays lean. | Medium | | |
+| RS-04 | Restore vanilla multiprocessing | Remove `multiprocessing.set_start_method("fork")` clusters that only existed for the TUI runner. | Medium | | |
 
-## In Progress
-| ID | Title | Started (YYYY-MM-DD) | Owner | Notes |
-|----|-------|----------------------|-------|-------|
+## CLIs
+| ID | Title | Description | Priority | Owner | Notes |
+|----|-------|-------------|----------|-------|-------|
+| CLI-01 | Implement apps/rag_cli.py | Build a REPL-style RAG CLI that loads `VectorDB`, reranks with `QwenReranker`, and generates answers via `MLXModelEngine`. | High | | |
+| CLI-02 | Implement apps/flux_cli.py | Wrap `rag.cli.flux_txt2image` behind a lightweight CLI so prompt-to-image flows live under `apps/`. | High | | |
+| CLI-03 | Implement apps/bench_cli.py | Dispatch existing `benchmarks.flux_benchmark` and `benchmarks.prompt_evaluation` runners from a single CLI. | Medium | | |
+| CLI-04 | Wire CLI scripts | Add `[project.scripts]` entries for `rag-cli`, `flux-cli`, and `bench-cli` in `pyproject.toml`. | Medium | | |
+| CLI-05 | (Optional) Add musicgen/voice CLIs | Expose MusicGen and Whisper demos once the basic CLIs stabilize. | Low | | |
 
-## Review / QA
-| ID | Title | PR / Branch | Reviewer | Notes |
-|----|-------|--------------|----------|-------|
+## MLX / RAG core
+| ID | Title | Description | Priority | Owner | Notes |
+|----|-------|-------------|----------|-------|-------|
+| CORE-01 | Keep src/rag UI-free | Ensure `src/rag` contains only ingestion, retrieval, and model wrappers—no Textual/Rich UI side effects. | High | | |
+| CORE-02 | Prefer mlx-models/ + models/indexes/ | All loaders should default to local paths (`MLX_MODELS_DIR`, `models/indexes/`) before hitting HF Hub. | High | | |
+| CORE-03 | Document HF_HUB_DISABLE_PROGRESS_BARS | Keep the HF env var guidance scoped to CLI entry points so downloads remain predictable. | Medium | | |
 
-## Done
-| ID    | Title                                            | Completed (YYYY-MM-DD) | Outcome |
-|-------|--------------------------------------------------|------------------------|---------|
-| RAG-013 | Implement Cross-Encoder Re-ranking               | 2025-11-07             | Implemented Qwen2-based reranker using mlx_lm. |
-| MG-008  | Integrate and activate Musicgen module           | 2025-11-08             | Successfully integrated MLX Musicgen for text-to-music generation, resolving attribute and duration issues. |
-| HYG-001 | Create Repo Hygiene Project Template             | 2025-11-08             | Implemented best practices for public repository hygiene, including licensing, documentation, code style, and CI/CD. |
-> Add/remove columns if needed, but keep the section order (Backlog → In Progress → Review/QA → Done) so other agents/tools can parse it.
+## Benchmarks & training
+| ID | Title | Description | Priority | Owner | Notes |
+|----|-------|-------------|----------|-------|-------|
+| BENCH-01 | Document bench-cli usage | Explain how to run the benchmark dispatcher and where JSON/metric outputs land. | Medium | | |
+| TRAIN-01 | Document LoRA training | Cover LoRA fine-tuning inputs/outputs under `lora/`. | Low | | |
+| TRAIN-02 | Connect experiments → indexes | Describe how `experiments/` ingestion scripts feed `models/indexes/` artifacts. | Low | | |
+
+## Docs
+| ID | Title | Description | Priority | Owner | Notes |
+|----|-------|-------------|----------|-------|-------|
+| DOC-01 | Reframe docs/README.md | Declare the repo as a CLI-first MLX lab (rag-cli, flux-cli, bench-cli) with no active TUI. | High | | |
+| DOC-02 | Note TUI removal in handoffs | Record the “TUI era” archive and CLI reset in `docs/HANDOFFS.md`. | High | | |
+| DOC-03 | Sync docs/tasks.md | Keep this ledger in sync with the RS/CLI/CORE/BENCH/TRAIN tasks defined above. | High | | |

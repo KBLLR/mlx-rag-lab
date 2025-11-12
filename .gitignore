@@ -27,6 +27,10 @@ nanobanana-output/
 
 # MLX specific generated files
 *.npz
+/mlx-models/*
+!/mlx-models/README.md
+!/mlx-models/manifests/
+!/mlx-models/manifests/**
 
 # Entire models directory (all contents should be local)
 models/
@@ -42,7 +46,6 @@ mlx-models/cross-encoder-ms-marco-MiniLM-L-6-v2/
 # Specific directories to keep local (as per user instruction and inferred from directory listing)
 KBLLR_face_MCKP/
 coremltools/
-flux/
 glitchVHS-main/
 lora/
 LoRATraining/

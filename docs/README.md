@@ -7,7 +7,7 @@ This repository started from the original [`mlx-rag` example](https://github.com
 - A Python RAG core (`src/rag`)
 - Shared utilities for MLX and data workflows (`src/libs`)
 - Local model artifacts (`models/`)
-- Native clients and UI experiments (`apps/`)
+- CLI-focused entrypoints and helpers (`apps/`)
 - Vendored / reference libraries (`third_party/`)
 
 The goal is: **one clean RAG stack, many clients**, all optimized for Apple Silicon.
@@ -38,72 +38,58 @@ This repo is intentionally structured so tools (and humans) know where to look:
 
 
 ```txt
-
 mlx-RAG/
-
-  docs/                # High-level documentation (this README, architecture notes, etc.)
-
-  .gemini/             # AI assistant / MCP configuration (optional, tool-specific)
-
-  src/
-
-    rag/               # Core RAG package (Python)
-
-      config/          # RAG config files (model paths, index locations, etc.)
-
-      ingestion/       # PDF/text ingestion & vector DB building
-
-      retrieval/       # Vector DB, similarity search, query strategies
-
-      models/          # Model wrappers & MLX integration
-
-      cli/             # Command-line entrypoints
-
-    libs/
-
-      mlx_core/        # Thin adapters around MLX / MLX-LM / model helpers
-
-      utils/           # Shared utilities (logging, I/O, misc helpers)
-
-  models/
-
-    mlx-models/        # Local model folders (LLMs, encoders) in MLX format
-
-    embeddings/        # Embedding artifacts (e.g. GTE NPZ files)
-
-    indexes/           # Vector DB index files (e.g. vdb.npz)
-
-    lora/              # LoRA datasets & training artefacts
-
-  apps/
-
-    ios/               # iOS / vision / RAG clients
-
-    macos/             # macOS-specific apps
-
-    ui-components/     # Shared UI building blocks
-
-  third_party/         # Vendored libraries & external projects
-
-  experiments/         # Prototypes, sandboxes, scratch experiments
-
-  var/
-
-    logs/              # Local logs (ignored in VCS)
-
-    outputs/           # Generated outputs / artifacts
-
-    source_docs/       # Local PDF documents for ingestion (ignored in VCS)
-
-  config/              # Environment & dependency configuration
-
-  pyproject.toml       # Canonical Python project definition (managed by uv)
-
-  uv.lock              # Locked dependency versions
-
-  LICENSE
-
+├── apps/
+│   ├── rag_cli.py
+│   ├── flux_cli.py
+│   ├── musicgen_cli.py
+│   ├── voice_cli.py
+│   └── bench_cli.py
+├── benchmarks/
+│   ├── flux/
+│   ├── musicgen/
+│   ├── flux_benchmark.py
+│   └── prompt_evaluation.py
+├── docs/
+│   ├── README.md
+│   ├── MLX-CORE.md
+│   ├── models/
+│   ├── profiling/
+│   ├── projects/
+│   └── tasks.md
+├── experiments/
+│   ├── benchmarking/
+│   ├── dataset_generation/
+│   └── ingestion/
+├── lora/
+├── mlx-models/
+├── models/
+│   └── indexes/
+├── musicgen/
+├── segment_anything/
+├── speechcommands/
+├── scripts/
+│   ├── clean_models.py
+│   └── model_manifest.py
+├── src/
+│   ├── __init__.py
+│   └── rag/
+├── tests/
+│   ├── flux/
+│   ├── models/
+│   ├── musicgen/
+│   └── test_flux_generation.py
+├── utils/
+│   └── convert_cross_encoder.py
+├── var/
+│   ├── benchmarking/
+│   ├── music_output/
+│   ├── source_docs/
+│   └── static/
+└── pyproject.toml
 ```
+
+The legacy Textual TUI now lives under `archive/tui/` for historical reference; day-to-day experimentation happens via the CLIs in `apps/`.
 
 
 
@@ -119,6 +105,4 @@ mlx-RAG/
 
 *   [`docs/tasks.md`](docs/tasks.md): A ledger for tracking all project tasks and their status.
 
-
-
-
+*   [`docs/COMMANDS_MANIFEST.md`](docs/COMMANDS_MANIFEST.md): Canonical collection of CLI commands grouped by app (Flux, MusicGen, RAG) for benchmarking and generation workflows.
