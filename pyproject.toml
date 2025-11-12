@@ -33,6 +33,7 @@ dependencies = [
 rag-cli = "rag.cli.entrypoints:rag_cli_main"
 flux-cli = "rag.cli.entrypoints:flux_cli_main"
 bench-cli = "rag.cli.entrypoints:bench_cli_main"
+musicgen-cli = "rag.cli.entrypoints:musicgen_cli_main"
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
 [project.optional-dependencies]
