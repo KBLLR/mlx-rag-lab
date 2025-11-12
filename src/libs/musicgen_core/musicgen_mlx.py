@@ -253,6 +253,7 @@ class MusicGen(nn.Module):
         self,
         text: str,
         max_steps: int = 200,
+        seed: int = -1,
         top_k: int = 250,
         temp: float = 1.0,
         guidance_coef: float = 3.0,
@@ -263,6 +264,7 @@ class MusicGen(nn.Module):
         Args:
             text (str): The text to condition generation on.
             max_steps (int): Max steps to generate.
+            seed (int): Seed for reproducible music generation. Use -1 for random.
             top_k (int): Top k used in sampling.
             temp (float): Sampling softmax temperature.
             guidance_coef (float): Classifier free guidance coefficent.
@@ -271,6 +273,9 @@ class MusicGen(nn.Module):
         Returns:
             An mx.array of audio samples of shape ``(num_samples,)``.
         """
+        if seed != -1:
+            mx.random.seed(seed)
+
         # Assuming no audio prompt we start with all bos token for the codebooks
         audio_shape = (1, max_steps + 1, self.num_codebooks)
         audio_seq = mx.full(audio_shape, self.bos_token_id)

@@ -39,3 +39,12 @@ Track every task for this experimental MLX lab. Keep sections grouped by focus a
 | DOC-01 | Reframe docs/README.md | Declare the repo as a CLI-first MLX lab (rag-cli, flux-cli, bench-cli) with no active TUI. | High | | |
 | DOC-02 | Note TUI removal in handoffs | Record the “TUI era” archive and CLI reset in `docs/HANDOFFS.md`. | High | | |
 | DOC-03 | Sync docs/tasks.md | Keep this ledger in sync with the RS/CLI/CORE/BENCH/TRAIN tasks defined above. | High | | |
+
+## Lab usage & status
+- [x] CI uses macOS-15 + Python 3.12 with `uv sync`.
+- [x] CLI-first shape: `apps/` + `[project.scripts]` for `rag-cli`, `flux-cli`, `bench-cli`.
+- [x] Flux helper tests passing (`tests/flux/test_flux_txt2image_helpers.py`).
+- [ ] Document stable commands vs WIP in `docs/LAB_STATUS.md`.
+- [ ] Optional: add smoke-test commands for `rag-cli`, `flux-cli`, `bench-cli` (run on Metal-stable machines).
+  - Pure help/arg parsing commands: `rag-cli --help` (safe even on cursed Metal machines).
+  - Metal-touching commands: `rag-cli` (real models), `flux-cli` (Flux pipeline), `bench-cli` with real models.

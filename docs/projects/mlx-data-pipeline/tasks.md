@@ -15,6 +15,8 @@ Track all work for the `MLX Data Pipeline` project here. Keep the table **sorted
 | MDP-006 | Establish Performance Benchmarks                 | Define and implement benchmarks for measuring data ingestion speed, VDB building time, retrieval latency, and memory usage. | Medium   |       |                | Use these benchmarks for optimization efforts.         |
 | MDP-007 | Implement Data Quality and Validation Checks     | Integrate automated data quality and validation checks at various stages of the pipeline. | Medium   |       |                | Prevent bad data from impacting downstream models.     |
 | MDP-008 | Develop Data Versioning Strategy                 | Explore and implement a strategy for versioning data and data pipelines to ensure reproducibility. | Low      |       |                | Consider DVC or similar tools if appropriate.          |
+| MDP-009 | Prototype `mlx.data` Pipelines for Document Banks | Build a reference pipeline that loads per-bank documents via `mlx.data`, chunks them, and emits samples ready for embedding. | High | Codex | Reviewed MLX docs (`mlx.data` samples-as-dicts paradigm) and project README outlining need for streaming ingestion. | Feeds the new per-bank VDB workflow. |
+| MDP-010 | Add Google Drive Connector Layer                 | Implement a document provider that syncs curated Drive folders into the ingestion pipeline. | Medium | Codex | Need Drive API creds, evaluate `pydrive2`, ensure outputs land in `var/source_docs/<bank>` before MLX ingestion. | Enables remote knowledge banks. |
 
 ## In Progress
 | ID | Title | Started (YYYY-MM-DD) | Owner | Notes |

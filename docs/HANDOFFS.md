@@ -53,15 +53,15 @@
 
 **Summary**
 - Extended the registry so Phi-3 (unsloth instruct 4-bit) plus MusicGen Small and its Encodec dependency live in `docs/models/model_registry.json`, highlighted Phi-3 in `mlx-models/README.md`, and regenerated manifests with `scripts/model_manifest.py sync` for those assets.
-- Added `tests/flux/test_flux_txt2image_helpers.py` alongside `tests/conftest.py` so helper logic can be exercised without touching MTX-heavy dependencies; pytest now passes.
-- Shifted the repo to a CLI-focused lab: created `apps/rag_cli.py`, `apps/flux_cli.py`, and `apps/bench_cli.py`, wired them into `[project.scripts]`, archived `src/rag/cli/rag_tui.py` in `archive/tui/`, and refreshed docs/manifest/tasks to describe the new shape while keeping `HF_HUB_DISABLE_PROGRESS_BARS=1` baked into `rag.models.model.Model`.
-- The old `ValueError: bad value(s) in fds_to_keep` path is now covered via the HF env var, but VectorDB still aborts with a Metal `NSRangeException` before that lock bug manifests unless the weights are pre-cached on a Metal-capable machine.
+- Added `tests/flux/test_flux_txt2image_helpers.py` alongside `tests/conftest.py` so helper logic can be exercised without touching MLX/Metal; pytest now passes.
+- Shifted the repo to a CLI-focused lab: created `apps/rag_cli.py`, `apps/flux_cli.py`, and `apps/bench_cli.py`, wired them into `[project.scripts]`, archived `src/rag/cli/rag_tui.py` in `archive/tui/`, and refreshed docs/manifest/tasks to describe the new structure (see `docs/LAB_STATUS.md` for what works vs what’s fragile).
+- CI now runs on macOS 3.12 and uses `uv sync`, and the previous `ValueError: bad value(s) in fds_to_keep` path is resolved via `HF_HUB_DISABLE_PROGRESS_BARS=1`; Metal’s `NSRangeException` still blocks heavy VectorDB runs unless the weights are cached on a Metal-capable machine.
 
 **Next Agent To-Do**
-1. Verify the new CLI story (RS/CLI tasks) end-to-end: confirm `rag-cli`, `flux-cli`, and `bench-cli` run via `uv`/`rag-cli` entry points and update `docs/tasks.md` as needed when new commands are added.
-2. Keep the HF Hub/manifest guidance (RH-003) current; remind operators that `HF_HUB_DISABLE_PROGRESS_BARS=1` is still set before downloads and link to `archive/tui/rag_tui.py` for historical context.
-3. Track any future Metal/NSRange issues when building vector DBs—run the CLI on a GPU-backed Mac (or with pre-downloaded caches) before assuming the lock bug is resolved.
+1. Continue documenting the CLI-first lab: keep `docs/LAB_STATUS.md` and the new “Lab usage & status” table in `docs/tasks.md` up to date as you add new commands or experiments.
+2. Reinforce the HF/manifest guidance (RH-003): link back to `archive/tui/rag_tui.py` for historical context, and keep reminding teams about the macOS + Python 3.12 CI setup that powers `uv sync`.
+3. Monitor Metal-related failures (NSRangeException) during RAG/VectorDB workflows; if you can land a Metal-ready host, try the `rag-cli` smoke tests to prove the CLI path before going further.
 
 **Notes**
 - `tests/conftest.py` now prepends `src`, so helper tests import `rag.cli.flux_txt2image` and stubbed `rag.models.flux` instead of pulling real MLX modules.
-- The archived Textual `rag_tui` lives under `archive/tui/rag_tui.py`; day-to-day experimentation should stay within the new `apps/` CLIs.
+- The archived Textual `rag_tui` lives under `archive/tui/rag_tui.py`; day-to-day experimentation should stay with the new `apps/` CLIs.

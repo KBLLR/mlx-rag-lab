@@ -25,14 +25,20 @@ class MusicgenAdapter:
         self.model_id = model_id
         self.local_model_dir = Path(local_model_dir)
 
+        # Handle 'melody' model_id which is 'facebook/musicgen-melody' not 'facebook/musicgen-melody'
+        if model_id.lower() == "melody":
+            hf_model_id = "facebook/musicgen-melody"
+        else:
+            hf_model_id = f"facebook/musicgen-{model_id}"
+
         # Try local first, then fall back to HF
-        local_path = self.local_model_dir / model_id.split("/")[-1]
+        local_path = self.local_model_dir / hf_model_id.split("/")[-1]
         if local_path.exists():
             print(f"Loading MusicGen model from local path: {local_path}")
             self.model = MusicGen.from_pretrained(str(local_path))
         else:
-            print(f"Loading MusicGen model from {model_id}...")
-            self.model = MusicGen.from_pretrained(model_id)
+            print(f"Loading MusicGen model from {hf_model_id}...")
+            self.model = MusicGen.from_pretrained(hf_model_id)
             # Optionally: cache to disk yourself if you want
 
         print("Musicgen model loaded.")
@@ -87,6 +93,7 @@ class MusicgenAdapter:
         prompt: str,
         duration_s: float,
         output_dir: str,
+        seed: int = -1,
         top_k: int = 250,
         temp: float = 1.0,
         guidance_coef: float = 3.0,
@@ -109,6 +116,7 @@ class MusicgenAdapter:
         audio = self.model.generate(
             prompt,
             max_steps=max_steps,
+            seed=seed,
             top_k=top_k,
             temp=temp,
             guidance_coef=guidance_coef,

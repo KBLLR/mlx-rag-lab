@@ -11,6 +11,68 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
+def preprocess_audio(
+    raw_audio: Union[mx.array, List[mx.array]],
+    sampling_rate: int = 24000,
+    chunk_length: Optional[int] = None,
+    chunk_stride: Optional[int] = None,
+):
+    r"""
+    Prepare inputs for the EnCodec model.
+
+    Args:
+        raw_audio: 1D (T,), 2D (T, C), or 3D (B, T, C) arrays, or list of such arrays.
+        sampling_rate: input sampling rate (ignored by the model itself).
+        chunk_length: model chunk length in samples.
+        chunk_stride: stride in samples between chunks.
+    """
+    if not isinstance(raw_audio, list):
+        # If a single batch (B, T, C) is passed, treat each item in the batch as a separate audio
+        if raw_audio.ndim == 3:
+            raw_audio = [raw_audio[i] for i in range(raw_audio.shape[0])] # List of (T, C)
+        elif raw_audio.ndim == 2: # (T, C)
+            raw_audio = [raw_audio]
+        elif raw_audio.ndim == 1: # (T,)
+            raw_audio = [raw_audio]
+        else:
+            raise ValueError(f"Unsupported raw_audio shape: {raw_audio.shape}")
+
+    # Ensure each item is (T, C)
+    processed_raw_audio = []
+    for x in raw_audio:
+        if x.ndim == 1:
+            processed_raw_audio.append(x[..., None]) # (T,) -> (T, 1)
+        elif x.ndim == 2:
+            processed_raw_audio.append(x) # (T, C)
+        else:
+            raise ValueError(f"Unsupported individual audio shape after initial processing: {x.shape}")
+
+    max_length = max(a.shape[0] for a in processed_raw_audio)
+
+    # If chunking parameters are provided, ensure max_length is compatible
+    if chunk_length is not None and chunk_stride is not None:
+        # Pad so that max_length is a multiple of chunk_stride
+        # This is crucial for the EncodecModel.encode loop
+        if (max_length % chunk_stride) != 0:
+            max_length += chunk_stride - (max_length % chunk_stride)
+
+    inputs = []
+    masks = []
+
+    for x in processed_raw_audio:
+        length = x.shape[0]
+        mask = mx.ones((length,), dtype=mx.bool_)
+
+        diff = max_length - length
+        if diff > 0:
+            mask = mx.pad(mask, (0, diff))
+            x = mx.pad(x, ((0, diff), (0, 0)))
+
+        inputs.append(x)
+        masks.append(mask)
+
+    return mx.stack(inputs), mx.stack(masks) # Returns (B, T, C) and (B, T)
+
 _lstm_kernel = mx.fast.metal_kernel(
     name="lstm",
     input_names=["x", "h_in", "cell", "hidden_size", "time_step", "num_time_steps"],
@@ -45,7 +107,6 @@ _lstm_kernel = mx.fast.metal_kernel(
         hidden_state[elem] = o * metal::precise::tanh(cell_state[elem]);
     """,
 )
-
 
 def lstm_custom(x, h_in, cell, time_step):
     assert x.ndim == 3, "Input to LSTM must have 3 dimensions."
@@ -471,939 +532,279 @@ class EncodecResidualVectorQuantizer(nn.Module):
 
 
 class EncodecModel(nn.Module):
-
-
     def __init__(self, config):
-
-
         super().__init__()
-
-
         self.config = config
 
-
-
-
-
         self.encoder = EncodecEncoder(config)
-
-
         self.decoder = EncodecDecoder(config)
-
-
         self.quantizer = EncodecResidualVectorQuantizer(config)
-
-
-
-
 
     # -------------------- ENCODE --------------------
 
-
-
-
-
     def _encode_frame(
-
-
         self,
-
-
         input_values: mx.array,
-
-
         bandwidth: float,
-
-
         padding_mask: mx.array,
-
-
     ) -> Tuple[mx.array, Optional[mx.array]]:
-
-
         """
-
-
         Encode a single frame using the VQ-VAE.
-
-
         """
-
-
         length = input_values.shape[1]
-
-
         duration = length / self.config.sampling_rate
 
-
-
-
-
         if (
-
-
             self.config.chunk_length_s is not None
-
-
             and duration > 1e-5 + self.config.chunk_length_s
-
-
         ):
-
-
             raise RuntimeError(
-
-
                 f"Duration of frame ({duration}) is longer than chunk "
-
-
                 f"{self.config.chunk_length_s}"
-
-
             )
-
-
-
-
 
         scale = None
 
-
-
-
-
         if self.config.normalize:
-
-
             # mask out padded regions before computing mono / scale
-
-
             input_values = input_values * padding_mask[..., None]
-
-
             mono = mx.sum(input_values, axis=2, keepdims=True) / input_values.shape[2]
-
-
             scale = mono.square().mean(axis=1, keepdims=True).sqrt() + 1e-8
-
-
             input_values = input_values / scale
 
-
-
-
-
         embeddings = self.encoder(input_values)
-
-
         codes = self.quantizer.encode(embeddings, bandwidth)
-
-
-
-
 
         return codes, scale
 
-
-
-
-
     def encode(
-
-
         self,
-
-
         input_values: mx.array,
-
-
         padding_mask: Optional[mx.array] = None,
-
-
         bandwidth: Optional[float] = None,
-
-
     ) -> Tuple[mx.array, Optional[mx.array]]:
-
-
         """
-
-
         Encode waveform into discrete codes.
 
-
-
-
-
         Args:
-
-
             input_values: (B, T, C) audio
-
-
             padding_mask: (B, T) boolean mask
-
-
             bandwidth: target kbps, as in config.target_bandwidths
-
-
         """
-
-
         if bandwidth is None:
-
-
             bandwidth = self.config.target_bandwidths[0]
 
-
-
-
-
         if bandwidth not in self.config.target_bandwidths:
-
-
             raise ValueError(
-
-
-                f"This model doesn\'t support the bandwidth {bandwidth}. "
-
-
+                f"This model doesn't support the bandwidth {bandwidth}. "
                 f"Select one of {self.config.target_bandwidths}."
-
-
             )
-
-
-
-
 
         _, input_length, channels = input_values.shape
 
-
-
-
-
         if channels < 1 or channels > 2:
-
-
             raise ValueError(
-
-
                 f"Number of audio channels must be 1 or 2, but got {channels}"
-
-
             )
 
-
-
-
-
         chunk_length = self.chunk_length
-
-
         if chunk_length is None:
-
-
             chunk_length = input_length
-
-
             stride = input_length
-
-
         else:
-
-
             stride = self.chunk_stride
 
-
-
-
-
         if padding_mask is None:
-
-
             padding_mask = mx.ones(input_values.shape[:2], dtype=mx.bool_)
 
-
-
-
-
         encoded_frames: List[mx.array] = []
-
-
         scales: List[Optional[mx.array]] = []
-
-
-
-
 
         step = chunk_length - stride
 
-
-
-
-
         if (input_length % stride) != step:
-
-
             raise ValueError(
-
-
                 "The input length is not properly padded for batched chunked encoding. "
-
-
                 "Make sure to pad the input correctly."
-
-
             )
 
-
-
-
-
         for offset in range(0, input_length - step, stride):
-
-
             mask = padding_mask[:, offset : offset + chunk_length].astype(mx.bool_)
-
-
             frame = input_values[:, offset : offset + chunk_length]
 
-
-
-
-
             encoded_frame, scale = self._encode_frame(frame, bandwidth, mask)
-
-
             encoded_frames.append(encoded_frame)
-
-
             scales.append(scale)
 
-
-
-
-
         encoded_frames = mx.stack(encoded_frames)
-
-
         return encoded_frames, scales
-
-
-
-
 
     # -------------------- DECODE --------------------
 
-
-
-
-
     @staticmethod
-
-
     def _linear_overlap_add(frames: List[mx.array], stride: int) -> mx.array:
-
-
         """
-
-
         Overlap-add reconstruction with a triangular-ish window.
 
-
-
-
-
         frames: list of (B, frame_len, C)
-
-
         stride: hop size between frames (in samples)
-
-
         """
-
-
         if not frames:
-
-
             raise ValueError("`frames` cannot be an empty list.")
 
-
-
-
-
         dtype = frames[0].dtype
-
-
         B, frame_len, C = frames[0].shape
-
-
-
-
 
         total_len = stride * (len(frames) - 1) + frames[-1].shape[1]
 
-
-
-
-
         t = mx.linspace(0.0, 1.0, frame_len + 2, dtype=dtype)[1:-1]
-
-
         w = 1.0 - 2.0 * (t - 0.5).abs()
-
-
         w = w[:, None]  # (T, 1)
 
-
-
-
-
         out = mx.zeros((B, total_len, C), dtype=dtype)
-
-
         weight_sum = mx.zeros((total_len, 1), dtype=dtype)
 
-
-
-
-
         offset = 0
-
-
         for frame in frames:
-
-
             cur_len = frame.shape[1]
-
-
             out[:, offset : offset + cur_len] += w[:cur_len] * frame
-
-
             weight_sum[offset : offset + cur_len] += w[:cur_len]
-
-
             offset += stride
-
-
-
-
 
         return out / weight_sum
 
-
-
-
-
     def _decode_frame(
-
-
         self,
-
-
         codes: mx.array,
-
-
         scale: Optional[mx.array] = None,
-
-
     ) -> mx.array:
-
-
         """
-
-
         Decode a single frame of codes to waveform.
-
-
         """
-
-
         embeddings = self.quantizer.decode(codes)
-
-
         audio = self.decoder(embeddings)
-
-
         if scale is not None:
-
-
             audio = audio * scale
-
-
         return audio
 
-
-
-
-
     @property
-
-
     def channels(self) -> int:
-
-
         return self.config.audio_channels
 
-
-
-
-
     @property
-
-
     def sampling_rate(self) -> int:
-
-
         return self.config.sampling_rate
 
-
-
-
-
     @property
-
-
     def chunk_length(self) -> Optional[int]:
-
-
         # may be None if model is fully streaming
-
-
         if getattr(self.config, "chunk_length_s", None) is None:
-
-
             return None
-
-
         return int(self.config.chunk_length_s * self.config.sampling_rate)
 
-
-
-
-
     @property
-
-
     def chunk_stride(self) -> Optional[int]:
-
-
         if (
-
-
             getattr(self.config, "chunk_length_s", None) is None
-
-
             or getattr(self.config, "overlap", None) is None
-
-
         ):
-
-
             return None
-
-
         return max(1, int((1.0 - self.config.overlap) * self.chunk_length))
 
-
-
-
-
     def decode(
-
-
         self,
-
-
         audio_codes: mx.array,
-
-
         audio_scales: Union[mx.array, List[mx.array]],
-
-
         padding_mask: Optional[mx.array] = None,
-
-
     ) -> mx.array:
-
-
         """
-
-
         Decode discrete codes into waveform.
 
-
-
-
-
         This matches the contract used by the official MLX MusicGen example:
-
-
         `self._audio_decoder.decode(audio_seq, audio_scales=[None])`.
-
-
         """
-
-
         chunk_length = self.chunk_length
 
-
-
-
-
         # Non-chunked decode: a single frame
-
-
         if chunk_length is None:
-
-
             if audio_codes.shape[1] != 1:
-
-
                 raise ValueError(
-
-
                     f"Expected a single frame when chunk_length is None, "
-
-
                     f"got {audio_codes.shape[1]}"
-
-
                 )
-
-
-
-
 
             codes = audio_codes[:, 0]
 
-
-
-
-
             if isinstance(audio_scales, list):
-
-
                 scale = audio_scales[0]
-
-
             else:
-
-
                 scale = audio_scales
-
-
-
-
 
             audio_values = self._decode_frame(codes, scale)
 
-
-
-
-
         # Chunked decode with overlap-add
-
-
         else:
-
-
             decoded_frames: List[mx.array] = []
-
-
             stride = self.chunk_stride or 1
 
-
-
-
-
             for codes, scale in zip(audio_codes, audio_scales):
-
-
                 decoded_frames.append(self._decode_frame(codes, scale))
-
-
-
-
 
             audio_values = self._linear_overlap_add(decoded_frames, stride)
 
-
-
-
-
         # Optional truncation based on original padding mask
-
-
         if padding_mask is not None and padding_mask.shape[1] < audio_values.shape[1]:
-
-
             audio_values = audio_values[:, : padding_mask.shape[1]]
-
-
-
-
 
         return audio_values
 
-
-
-
-
     # -------------------- LOADING --------------------
 
-
-
-
-
     @classmethod
-
-
     def from_pretrained(cls, path_or_repo: str):
-
-
         """
-
-
         Load an Encodec model and a preprocessing callable.
-
-
-
-
 
         `path_or_repo` can be:
 
-
           * a local directory containing `config.json` + `model.safetensors`
 
-
           * a HF repo id like `"mlx-community/encodec-32khz-float32"`
-
-
         """
-
 
         from huggingface_hub import snapshot_download
 
-
-
-
-
         path = Path(path_or_repo)
 
-
-
-
-
         # Allow passing just a HF repo id; fall back to snapshot_download
-
-
         if not path.exists():
-
-
             path = Path(
-
-
                 snapshot_download(
-
-
                     repo_id=path_or_repo,
-
-
                     allow_patterns=["*.json", "*.safetensors", "*.model"],
-
-
                 )
-
-
             )
 
-
-
-
-
         with open(path / "config.json", "r") as f:
-
-
             config = SimpleNamespace(**json.load(f))
 
-
-
-
+        # Add default chunking parameters if missing from config
+        if not hasattr(config, "chunk_length_s"):
+            config.chunk_length_s = 1.0 # Default to 1 second chunks
+        if not hasattr(config, "overlap"):
+            config.overlap = 0.01 # Default to 1% overlap
 
         model = cls(config)
-
-
         model.load_weights(str(path / "model.safetensors"))
 
-
-
-
-
         processor = functools.partial(
-
-
             preprocess_audio,
-
-
             sampling_rate=config.sampling_rate,
-
-
             chunk_length=model.chunk_length,
-
-
             chunk_stride=model.chunk_stride,
-
-
         )
 
-
-
-
-
         # Standard MLX pattern: compile / materialize params
-
-
         mx.eval(model)
 
-
-
-
-
         return model, processor
-
-
-
-
-
-
-
-
-def preprocess_audio(
-
-
-    raw_audio: Union[mx.array, List[mx.array]],
-
-
-    sampling_rate: int = 24000,
-
-
-    chunk_length: Optional[int] = None,
-
-
-    chunk_stride: Optional[int] = None,
-
-
-):
-
-
-    r"""
-
-
-    Prepare inputs for the EnCodec model.
-
-
-
-
-
-    Args:
-
-
-        raw_audio: 1D or 2D arrays, or list of arrays.
-
-
-        sampling_rate: input sampling rate (ignored by the model itself).
-
-
-        chunk_length: model chunk length in samples.
-
-
-        chunk_stride: stride in samples between chunks.
-
-
-    """
-
-
-    if not isinstance(raw_audio, list):
-
-
-        raw_audio = [raw_audio]
-
-
-
-
-
-    # Ensure (T, C) where C == 1 for mono
-
-
-    raw_audio = [x[..., None] if x.ndim == 1 else x for x in raw_audio]
-
-
-
-
-
-    max_length = max(a.shape[0] for a in raw_audio)
-
-
-
-
-
-    if chunk_length is not None:
-
-
-        # Pad so that max_length is a multiple of chunk_stride
-
-
-        max_length += chunk_length - (max_length % chunk_stride)
-
-
-
-
-
-    inputs = []
-
-
-    masks = []
-
-
-
-
-
-    for x in raw_audio:
-
-
-        length = x.shape[0]
-
-
-        mask = mx.ones((length,), dtype=mx.bool_)
-
-
-
-
-
-        diff = max_length - length
-
-
-        if diff > 0:
-
-
-            mask = mx.pad(mask, (0, diff))
-
-
-            x = mx.pad(x, ((0, diff), (0, 0)))
-
-
-
-
-
-        inputs.append(x)
-
-
-        masks.append(mask)
-
-
-
-
-
-    return mx.stack(inputs), mx.stack(masks)

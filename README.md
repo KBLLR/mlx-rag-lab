@@ -1,6 +1,6 @@
 # mlx-RAG
 
-This repository is a monorepo for experiments and applications built on top of MLX-based retrieval-augmented generation (RAG) on Apple silicon.
+This repository is a monorepo for experiments and applications built on top of MLX-based retrieval-augmented generation (RAG) on Apple silicon. It is a lab: MLX-powered RAG, Flux, MusicGen, and benchmarking experiments gathered in one repo, not a polished product.
 
 ## Project Overview
 
@@ -50,19 +50,15 @@ To get started with `mlx-RAG`, follow these steps:
 
 ## Usage
 
-Once set up, you can run various RAG components and tools. For example:
+The lab exposes three main CLIs plus helper workflows:
 
-*   **Interactive RAG CLI:**
-    ```bash
-    uv run python -m rag.cli.interactive_rag
-    ```
+- `rag-cli` – RAG over a local vector index; it reranks documents before calling `MLXModelEngine`. The CLI may trigger MLX/Metal `NSRangeException` when you hit real models.
+- `flux-cli` – Flux text-to-image demo that wraps `rag.cli.flux_txt2image`.
+- `bench-cli` – Dispatches the Flux benchmark runner or prompt evaluation workflow with familiar presets.
 
-*   **Generate Music (with Musicgen):**
-    ```bash
-    uv run python -m rag.cli.generate_music --prompt "a short test melody" --duration 5
-    ```
+Every command is registered via `[project.scripts]` so you can run `uv run rag-cli ...` (or install the package to expose the entry points). The previous Textual-based TUI lives in `archive/tui/` and is not maintained; the CLI path is the canonical way forward.
 
-For more detailed usage examples and available commands, please refer to the `docs/README.md` and the `src/rag/cli/` directory.
+For ingestion, benchmarking, or MusicGen experiments you still use the scripts under `src/rag/cli/`, `benchmarks/`, and `musicgen/` as documented in `docs/COMMANDS_MANIFEST.md`.
 
 ## Contributing
 

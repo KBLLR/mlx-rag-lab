@@ -9,6 +9,11 @@ rich~=13.7.1
 numpy>=1.26
 tqdm>=4.66
 requests>=2.32
+soundfile>=0.12.1
+regex
+Pillow
+sentencepiece
+datasets
 
 [pdf]
 unstructured[pdf]~=0.18.15

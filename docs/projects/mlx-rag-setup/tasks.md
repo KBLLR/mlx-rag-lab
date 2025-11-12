@@ -15,6 +15,7 @@ Track all work for the `mlx-RAG` project here. Keep the table **sorted by priori
 | RAG-010 | Implement Automated Document/VDB Quality Checks  | Develop automated tests to validate the quality of ingested documents and the vector database. | Low      |       |                | Ensure data integrity and retrieval effectiveness.     |
 | RAG-012 | Add Document Summaries to `list-docs`            | Enhance the `list-docs` command to show a brief, AI-generated summary for each document. | Medium   |       |                | This would likely involve a separate LLM call per document during ingestion. |
 | RAG-014 | Implement Native MLX Cross-Encoder               | Replace the placeholder re-ranking logic with a functional, native MLX cross-encoder. | Medium   |       |                | This will involve adapting a BERT model from mlx-examples or fine-tuning. |
+| RAG-015 | Per-bank VDB ingestion                          | Generate a dedicated index + metadata per `var/source_docs/<bank>` folder so retrieval can target specific knowledge banks. | High     | Codex | Need to inspect folder taxonomy (agentic-design, mlx, etc.), review current `create_vdb.py`, and define metadata schema. | Enables multi-bank orchestration and selective querying. |
 
 ## In Progress
 | ID | Title | Started (YYYY-MM-DD) | Owner | Notes |

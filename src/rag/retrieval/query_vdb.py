@@ -1,7 +1,9 @@
 import argparse
+from pathlib import Path
+from typing import Iterator
+
 from rag.retrieval.vdb import VectorDB
 from libs.mlx_core.model_engine import MLXModelEngine
-from typing import Iterator
 
 TEMPLATE = """You are an expert assistant. Your goal is to provide short, direct, and factually grounded answers based ONLY on the provided context. Your total response, including context, must not exceed 4096 tokens. Cite your sources clearly. The retrieval strategy used is hybrid search.
 
@@ -30,6 +32,17 @@ if __name__ == "__main__":
         default="models/indexes/vdb.npz", # Updated default VDB
         help="The path to read the vector DB",
     )
+    parser.add_argument(
+        "--bank",
+        type=str,
+        help="Optional knowledge bank name (loads models/indexes/<bank>/vdb.npz). Overrides --vdb.",
+    )
+    parser.add_argument(
+        "--indexes-dir",
+        type=str,
+        default="models/indexes",
+        help="Root directory for per-bank indexes.",
+    )
     # Model
     parser.add_argument(
         "--model-id",
@@ -39,12 +52,30 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    if args.bank:
+        vdb_path = Path(args.indexes_dir).expanduser().resolve() / args.bank / "vdb.npz"
+    else:
+        vdb_path = Path(args.vdb).expanduser().resolve()
+
+    if not vdb_path.exists():
+        raise SystemExit(f"Vector DB not found at {vdb_path}.")
+
     # Initialize VectorDB
-    m = VectorDB(args.vdb)
+    m = VectorDB(str(vdb_path))
     
     # Get raw contexts from VDB
     raw_contexts = m.query(args.question, k=5)
-    context = "\n---\n".join(raw_contexts)
+    if not raw_contexts:
+        raise SystemExit("No results returned from the vector database.")
+
+    def format_context(item):
+        if isinstance(item, dict):
+            source = item.get("source", "unknown")
+            text = item.get("text", "")
+            return f"Source: {source}\n{text}"
+        return str(item)
+
+    context = "\n---\n".join(format_context(item) for item in raw_contexts)
     
     # Format prompt
     prompt = TEMPLATE.format(context=context, question=args.question)

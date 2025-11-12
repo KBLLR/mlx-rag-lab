@@ -67,21 +67,31 @@ uv run python -m rag.cli.download_model --model-id BAAI/bge-large-en-v1.5-mlx
 
 ## 5. Creating a Vector Database (VDB)
 
-To create a vector database from your documents, use the `create_vdb.py` script. This example uses a PDF file.
+You can now build indexes either from a specific set of PDFs or by pointing at your knowledge-bank root folder.
+
+### Single Index from Specific PDFs
 
 ```bash
-uv run python -m rag.ingestion.create_vdb --pdf <PATH_TO_YOUR_PDF_FILE> --vdb models/indexes/vdb.npz
+uv run python -m rag.ingestion.create_vdb \
+  --pdfs var/source_docs/mlx/*.pdf \
+  --vdb models/indexes/combined_vdb.npz
 ```
 
-**Example:**
+*   `--pdfs` accepts individual files and/or directories (all nested PDFs are included).
+*   The `--vdb` argument sets the output `.npz` path; a companion `.meta.json` file is written automatically.
+
+### One Index per Knowledge Bank
 
 ```bash
-uv run python -m rag.ingestion.create_vdb --pdf var/source_docs/my_document.pdf --vdb models/indexes/vdb.npz
+uv run python -m rag.ingestion.create_vdb \
+  --banks-root var/source_docs \
+  --output-dir models/indexes \
+  --mlx-batch-size 4 --mlx-prefetch 8
 ```
 
-*   Replace `<PATH_TO_YOUR_PDF_FILE>` with the absolute or relative path to your PDF document.
-*   The `--vdb` argument specifies the output path for your vector database index.
+This iterates over every immediate subfolder inside `var/source_docs/` (e.g., `agentic-design`, `mlx`, `generative-music`) and writes one VDB under `models/indexes/<bank>/vdb.npz` plus metadata describing the documents, chunking parameters, and timestamp. The command requires the `mlx-data` package, so make sure you’ve run `uv add mlx-data` beforehand.
 
+> Tip: tweak `--mlx-batch-size` / `--mlx-prefetch` to fine-tune throughput. The pipeline always relies on `mlx.data`, so ensure `uv add mlx-data` has been run in your environment.
 ## 6. Querying the Vector Database
 
 Once your vector database is created, you can query it using the `query_vdb.py` script:
@@ -90,14 +100,17 @@ Once your vector database is created, you can query it using the `query_vdb.py` 
 uv run python -m rag.retrieval.query_vdb --question "<YOUR_QUESTION>" --vdb models/indexes/vdb.npz
 ```
 
-**Example:**
+If you generated per-bank indexes, supply the bank name instead of a direct `.npz` path:
 
 ```bash
-uv run python -m rag.retrieval.query_vdb --question "What is MLX?" --vdb models/indexes/vdb.npz
+uv run python -m rag.retrieval.query_vdb \
+  --question "What is MLX?" \
+  --bank agentic-design \
+  --indexes-dir models/indexes
 ```
 
 *   Replace `<YOUR_QUESTION>` with the question you want to ask.
-*   Ensure the `--vdb` argument points to your created vector database.
+*   Ensure the `--vdb` argument (or `--bank`) points to your created vector database.
 
 ## 7. Verification Steps
 

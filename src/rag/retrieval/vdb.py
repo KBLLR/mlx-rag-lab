@@ -1,10 +1,13 @@
 import mlx.core as mx
 import numpy as np
-import json # Added json import
-from pathlib import Path # Added Path import
+import json  # Added json import
+from pathlib import Path  # Added Path import
 from rag.models.model import Model
 from typing import List, Optional, Dict
 from unstructured.partition.pdf import partition_pdf
+
+CHUNK_SIZE = 256
+CHUNK_OVERLAP = 50
 
 
 def split_text_into_chunks(text, chunk_size, overlap):
@@ -78,7 +81,7 @@ class VectorDB:
                 self.content = []
 
     def ingest(self, content: str, document_name: str) -> None:
-        chunks = split_text_into_chunks(text=content, chunk_size=256, overlap=50)
+        chunks = split_text_into_chunks(text=content, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
         if not chunks:
             return
 
