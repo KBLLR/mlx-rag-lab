@@ -3,7 +3,7 @@ name = "mlx-rag"
 version = "0.1.0"
 description = "Local RAG on Apple Silicon using MLX, Hugging Face models and custom vector DB."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 authors = [
   { name = "David Caballero" }
 ]
