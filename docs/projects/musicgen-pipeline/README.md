@@ -200,8 +200,14 @@ Text description → MusicGen → Audio file
 ### Phase 1: Core CLI ✅
 - [x] Create `apps/musicgen_cli.py`
 - [x] Add to `pyproject.toml` scripts
-- [ ] Test basic generation
-- [ ] Add signal handling (Ctrl+C cleanup)
+- [x] Test basic generation (`uv run musicgen-cli --prompt "happy rock" --max-steps 300`)
+- [x] Add signal handling (Ctrl+C cleanup)
+
+**Test Results** (2025-11-12):
+- Generated 10s audio (300 steps) in ~7 seconds
+- Performance: ~44 it/s (~23ms/step on M3 Max)
+- Output: 371KB WAV, 16-bit mono PCM, 32kHz
+- Model loading and cleanup work correctly
 
 ### Phase 2: Polish
 - [ ] Add progress bar for long generations
