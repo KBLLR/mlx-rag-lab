@@ -14,6 +14,14 @@ Central index of the high-signal commands used across the MLX-RAG lab. Entries a
 | **flux-cli prompt run** | ```bash\nflux-cli --prompt "a sci-fi skyline" --steps 8 --image-size 512x512\n``` | Wraps `rag.cli.flux_txt2image` with a simpler interface plus output directory defaults. |
 | **bench-cli dispatcher** | ```bash\nbench-cli flux```<br>```bash\nbench-cli prompt``` | Dispatches the Flux benchmark runner or the prompt evaluation workflow. |
 
+### CLI entrypoints
+
+| Command | Module | Notes |
+| --- | --- | --- |
+| `rag-cli` | `apps.rag_cli:main` | Entry point uses `rag.cli.entrypoints:rag_cli_main` to set `PYTHONPATH` before invoking the CLI. |
+| `flux-cli` | `apps.flux_cli:main` | Wraps the Flux CLI via `rag.cli.entrypoints:flux_cli_main`. |
+| `bench-cli` | `apps.bench_cli:main` | Dispatches bench runners via `rag.cli.entrypoints:bench_cli_main`. |
+
 ---
 
 ## Flux (image generation & benchmarking)

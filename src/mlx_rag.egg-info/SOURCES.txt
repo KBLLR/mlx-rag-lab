@@ -16,14 +16,18 @@ src/libs/utils/__init__.py
 src/mlx_rag.egg-info/PKG-INFO
 src/mlx_rag.egg-info/SOURCES.txt
 src/mlx_rag.egg-info/dependency_links.txt
+src/mlx_rag.egg-info/entry_points.txt
 src/mlx_rag.egg-info/requires.txt
 src/mlx_rag.egg-info/top_level.txt
 src/rag/__init__.py
 src/rag/mlx_compat.py
 src/rag/cli/__init__.py
+src/rag/cli/app_launcher.py
 src/rag/cli/benchmark.py
+src/rag/cli/download_flux_models.py
 src/rag/cli/download_model.py
 src/rag/cli/download_musicgen_weights.py
+src/rag/cli/entrypoints.py
 src/rag/cli/flux.py
 src/rag/cli/flux_dreambooth.py
 src/rag/cli/flux_txt2image.py
@@ -34,6 +38,7 @@ src/rag/ingestion/__init__.py
 src/rag/ingestion/create_vdb.py
 src/rag/models/__init__.py
 src/rag/models/bert.py
+src/rag/models/hub.py
 src/rag/models/model.py
 src/rag/models/qwen_reranker.py
 src/rag/models/flux/__init__.py
@@ -52,3 +57,4 @@ src/rag/models/flux/utils.py
 src/rag/retrieval/__init__.py
 src/rag/retrieval/query_vdb.py
 src/rag/retrieval/vdb.py
+tests/test_flux_generation.py

@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.scripts]
-rag-cli = "apps.rag_cli:main"
-flux-cli = "apps.flux_cli:main"
-bench-cli = "apps.bench_cli:main"
+rag-cli = "rag.cli.entrypoints:rag_cli_main"
+flux-cli = "rag.cli.entrypoints:flux_cli_main"
+bench-cli = "rag.cli.entrypoints:bench_cli_main"
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
 [project.optional-dependencies]
@@ -69,7 +69,7 @@ rag-extras = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "src", "apps" = "."}
 packages = [
     "rag",
     "rag.config",
@@ -105,6 +105,9 @@ exclude = '''
   | _build
   | buck-out
   | build
-  | dist
+    | dist
 )/
 '''
+
+[tool.uv]
+package = true
