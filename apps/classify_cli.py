@@ -10,6 +10,8 @@ from typing import List, Dict
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.panel import Panel
+import statistics
 
 console = Console()
 
@@ -138,29 +140,121 @@ def classify_vdb_chunks(
     return results
 
 
+def truncate_source_path(path: str, max_len: int = 40) -> str:
+    """Smart path truncation keeping important parts."""
+    if len(path) <= max_len:
+        return path
+
+    parts = path.split('/')
+    filename = parts[-1]
+
+    if len(filename) > max_len - 10:
+        return f".../{filename[:max_len-13]}..."
+
+    remaining = max_len - len(filename) - 4
+    start_chars = remaining // 2
+
+    if start_chars > 0:
+        return f"{path[:start_chars]}.../{filename}"
+    else:
+        return f".../{filename}"
+
+
+def render_confidence_bars(predictions: List[Dict], max_width: int = 15) -> str:
+    """Render horizontal bar chart for confidence scores."""
+    bars = []
+    for pred in predictions:
+        label = pred['label']
+        score = pred['score']
+        filled = int(score * max_width)
+        bar = "█" * filled + "░" * (max_width - filled)
+
+        # Color code by score
+        if score > 0.5:
+            color = "green"
+        elif score > 0.3:
+            color = "yellow"
+        else:
+            color = "red"
+
+        bars.append(f"[{color}]{bar}[/{color}] {label} ({score:.1%})")
+
+    return "\n".join(bars)
+
+
+def detect_low_confidence(results: List[Dict]) -> Dict:
+    """Detect patterns indicating low model confidence."""
+    if not results:
+        return {"is_low_confidence": False}
+
+    all_scores = []
+    for result in results:
+        if result.get("predictions"):
+            all_scores.extend([p["score"] for p in result["predictions"]])
+
+    if not all_scores or len(all_scores) < 2:
+        return {"is_low_confidence": False}
+
+    avg_score = statistics.mean(all_scores)
+    std_dev = statistics.stdev(all_scores)
+
+    # Check for uniform distributions (all scores very similar)
+    is_uniform = std_dev < 0.02
+
+    # Check for low maximum scores
+    max_score = max(all_scores)
+    is_low_max = max_score < 0.2
+
+    return {
+        "is_low_confidence": is_uniform or is_low_max,
+        "reason": "uniform distribution" if is_uniform else "low maximum score" if is_low_max else None,
+        "avg_score": avg_score,
+        "std_dev": std_dev,
+        "max_score": max_score,
+    }
+
+
 def display_results(results: List[Dict], top_k: int = 3):
-    """Display classification results in a table."""
+    """Display classification results in a table with confidence visualization."""
     if not results:
         console.print("[yellow]No results matched the criteria (possibly min-score threshold too high)[/yellow]")
         console.print("[dim]Try lowering --min-score to 0.0 to see all results[/dim]")
         return
 
+    # Check for low confidence patterns
+    confidence_analysis = detect_low_confidence(results)
+    if confidence_analysis["is_low_confidence"]:
+        warning_msg = f"""⚠️  [bold yellow]Low Confidence Detected[/bold yellow]
+
+The model appears uncertain about these classifications.
+Reason: {confidence_analysis["reason"]}
+
+Statistics:
+• Average score: {confidence_analysis["avg_score"]:.1%}
+• Score variation: {confidence_analysis["std_dev"]:.3f}
+• Maximum score: {confidence_analysis["max_score"]:.1%}
+
+[dim]This often indicates:[/dim]
+[dim]• Content doesn't clearly match any category[/dim]
+[dim]• Model may need fine-tuning for this domain[/dim]
+[dim]• Consider different labels or classification mode[/dim]"""
+
+        console.print(Panel(warning_msg, border_style="yellow", title="Confidence Warning"))
+        console.print()
+
     table = Table(title="Classification Results", show_header=True, header_style="bold magenta")
-    table.add_column("Text", style="cyan", no_wrap=False, max_width=50)
-    table.add_column("Source", style="dim")
-    table.add_column("Top Predictions", style="green")
+    table.add_column("Text", style="cyan", no_wrap=False, max_width=40)
+    table.add_column("Source", style="dim", max_width=35)
+    table.add_column("Confidence Bars", style="white", no_wrap=False)
 
     for result in results[:20]:  # Show first 20
         text = result["text"]
-        source = result.get("source", "N/A")
+        source = truncate_source_path(result.get("source", "N/A"))
 
-        # Format predictions
-        preds_str = "\n".join([
-            f"{pred['label']}: {pred['score']:.2%}"
-            for pred in result["predictions"][:top_k]
-        ])
+        # Format predictions with bars
+        bars = render_confidence_bars(result["predictions"][:top_k])
 
-        table.add_row(text, source, preds_str)
+        table.add_row(text, source, bars)
 
     console.print(table)
 
