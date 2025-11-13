@@ -10,7 +10,10 @@ from apps.ui.components import (
     show_system_warning,
     render_chat_message,
 )
-from apps.ui.utils import truncate_source_path, get_confidence_color
+from apps.ui.utils import (
+    truncate_source_path,
+    get_confidence_color,
+)
 
 __all__ = [
     "get_console",
