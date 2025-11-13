@@ -23,6 +23,65 @@ from rich.table import Table
 
 console = Console()
 
+# Pipeline ASCII art headers
+PIPELINE_HEADERS = {
+    "rag": {
+        "ascii": """
+    ██████╗  █████╗  ██████╗
+    ██╔══██╗██╔══██╗██╔════╝
+    ██████╔╝███████║██║  ███╗
+    ██╔══██╗██╔══██║██║   ██║
+    ██║  ██║██║  ██║╚██████╔╝
+    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝
+        """,
+        "color": "bold magenta",
+    },
+    "flux": {
+        "ascii": """
+    ███████╗██╗     ██╗   ██╗██╗  ██╗
+    ██╔════╝██║     ██║   ██║╚██╗██╔╝
+    █████╗  ██║     ██║   ██║ ╚███╔╝
+    ██╔══╝  ██║     ██║   ██║ ██╔██╗
+    ██║     ███████╗╚██████╔╝██╔╝ ██╗
+    ╚═╝     ╚══════╝ ╚═════╝ ╚═╝  ╚═╝
+        """,
+        "color": "bold cyan",
+    },
+    "musicgen": {
+        "ascii": """
+    ███╗   ███╗██╗   ██╗███████╗██╗ ██████╗
+    ████╗ ████║██║   ██║██╔════╝██║██╔════╝
+    ██╔████╔██║██║   ██║███████╗██║██║
+    ██║╚██╔╝██║██║   ██║╚════██║██║██║
+    ██║ ╚═╝ ██║╚██████╔╝███████║██║╚██████╗
+    ╚═╝     ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═════╝
+        """,
+        "color": "bold green",
+    },
+    "whisper": {
+        "ascii": """
+    ██╗    ██╗██╗  ██╗██╗███████╗██████╗ ███████╗██████╗
+    ██║    ██║██║  ██║██║██╔════╝██╔══██╗██╔════╝██╔══██╗
+    ██║ █╗ ██║███████║██║███████╗██████╔╝█████╗  ██████╔╝
+    ██║███╗██║██╔══██║██║╚════██║██╔═══╝ ██╔══╝  ██╔══██╗
+    ╚███╔███╔╝██║  ██║██║███████║██║     ███████╗██║  ██║
+     ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝
+        """,
+        "color": "bold yellow",
+    },
+    "bench": {
+        "ascii": """
+    ██████╗ ███████╗███╗   ██╗ ██████╗██╗  ██╗
+    ██╔══██╗██╔════╝████╗  ██║██╔════╝██║  ██║
+    ██████╔╝█████╗  ██╔██╗ ██║██║     ███████║
+    ██╔══██╗██╔══╝  ██║╚██╗██║██║     ██╔══██║
+    ██████╔╝███████╗██║ ╚████║╚██████╗██║  ██║
+    ╚═════╝ ╚══════╝╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝
+        """,
+        "color": "bold red",
+    },
+}
+
 # Pipeline metadata
 PIPELINES = {
     "rag": {
@@ -123,9 +182,7 @@ def show_header():
     ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝    ╚══════╝╚═╝  ╚═╝╚═════╝
     """
     console.print(f"[bold cyan]{header}[/bold cyan]")
-    console.print(
-        "[dim]Local-first MLX pipelines on Apple Silicon[/dim]\n", justify="center"
-    )
+    console.print("[dim]Local-first MLX pipelines on Apple Silicon[/dim]\n", justify="left")
 
 
 def get_cache_info():
@@ -228,9 +285,7 @@ def delete_cached_models():
         return
 
     # Calculate total size to free
-    total_size = sum(
-        repo.size_on_disk for repo in cache_info.repos if repo.repo_id in selected
-    )
+    total_size = sum(repo.size_on_disk for repo in cache_info.repos if repo.repo_id in selected)
 
     console.print(f"\n[bold red]You are about to delete {len(selected)} model(s)[/bold red]")
     console.print(f"[bold]Total space to free: {total_size / 1e9:.2f} GB[/bold]\n")
@@ -246,12 +301,14 @@ def delete_cached_models():
     if confirm:
         console.print("\n[bold]Deleting models...[/bold]\n")
 
-        strategy = cache_info.delete_revisions(*[
-            rev.commit_hash
-            for repo in cache_info.repos
-            if repo.repo_id in selected
-            for rev in repo.revisions
-        ])
+        strategy = cache_info.delete_revisions(
+            *[
+                rev.commit_hash
+                for repo in cache_info.repos
+                if repo.repo_id in selected
+                for rev in repo.revisions
+            ]
+        )
 
         console.print(f"[green]✓ Deleted {len(selected)} model(s)[/green]")
         console.print(f"[green]✓ Freed {strategy.expected_freed_size / 1e9:.2f} GB[/green]")
@@ -263,9 +320,7 @@ def delete_cached_models():
 
 def download_model():
     """Interactive model download with progress and cache detection."""
-    console.print("
-[bold cyan]📥 Download Model[/bold cyan]
-")
+    console.print("\n[bold cyan]📥 Download Model[/bold cyan]\n")
 
     # Select pipeline
     pipeline_choice = inquirer.select(
@@ -352,28 +407,22 @@ def download_model():
         ).execute()
 
     if model_id is None:
-        input("
-[dim]Press Enter to continue...[/dim]")
+        input("\n[dim]Press Enter to continue...[/dim]")
         return
 
     # Check if already cached
     if is_model_cached(model_id):
-        console.print(f"
-[yellow]⚠️  Model already downloaded: {model_id}[/yellow]")
+        console.print(f"\n[yellow]⚠️  Model already downloaded: {model_id}[/yellow]")
         redownload = inquirer.confirm(
             message="Re-download anyway?",
             default=False,
         ).execute()
         if not redownload:
-            input("
-[dim]Press Enter to continue...[/dim]")
+            input("\n[dim]Press Enter to continue...[/dim]")
             return
 
-    console.print(f"
-[bold]Downloading: {model_id}[/bold]
-")
-    console.print("[dim]This will download the model to ~/.cache/huggingface/hub[/dim]
-")
+    console.print(f"\n[bold]Downloading: {model_id}[/bold]\n")
+    console.print("[dim]This will download the model to ~/.cache/huggingface/hub[/dim]\n")
 
     confirm = inquirer.confirm(
         message="Start download?",
@@ -393,14 +442,11 @@ def download_model():
 
                 snapshot_download(repo_id=model_id, cache_dir=None)
                 progress.update(task, completed=True)
-                console.print(f"
-[green]✓ Downloaded {model_id}[/green]")
+                console.print(f"\n[green]✓ Downloaded {model_id}[/green]")
             except Exception as e:
-                console.print(f"
-[red]✗ Download failed: {e}[/red]")
+                console.print(f"\n[red]✗ Download failed: {e}[/red]")
 
-    input("
-[dim]Press Enter to continue...[/dim]")
+    input("\n[dim]Press Enter to continue...[/dim]")
 
 
 def show_models_menu():
@@ -417,9 +463,8 @@ def show_models_menu():
     for model, size, desc in MODELS["whisper"]["english_only"]:
         console.print(f"  • {model.split('/')[-1]} - {size} - {desc}")
 
-    console.print("\n[bold]Quantized Options:[/bold]")
-    for option in MODELS["whisper"]["quantized"]:
-        console.print(f"  • {option}")
+    # Note: Quantized versions are available by adding -4bit or -8bit suffixes
+    console.print("\n[dim]Note: Many models have quantized variants (add -4bit or -8bit to model name)[/dim]")
 
     console.print("\n[bold yellow]MUSICGEN - AUDIO GENERATION[/bold yellow]")
     for model, size, desc in MODELS["musicgen"]:
@@ -618,7 +663,9 @@ def configure_musicgen():
 
     output_arg = ""
     if use_custom_name:
-        filename = inquirer.text(message="Enter filename (without extension):", default="music").execute()
+        filename = inquirer.text(
+            message="Enter filename (without extension):", default="music"
+        ).execute()
         output_arg = f"--output var/music_output/{filename}.wav"
     else:
         output_arg = "--output-dir var/music_output --prefix musicgen"
@@ -670,7 +717,11 @@ def configure_rag():
     vdb_path = Path("models/indexes/vdb.npz")
     if not vdb_path.exists():
         console.print("[red]Vector database not found at models/indexes/vdb.npz[/red]")
-        console.print("[yellow]You need to ingest documents first.[/yellow]")
+        console.print("[yellow]You need to ingest documents first.[/yellow]\n")
+        console.print("[dim]To create a vector database:[/dim]")
+        console.print("[dim]  1. Place your documents in the data/ directory[/dim]")
+        console.print("[dim]  2. Run: uv run ingest-cli[/dim]")
+        console.print("[dim]  3. This will create the vector index at models/indexes/vdb.npz[/dim]")
         return None
 
     use_reranker = inquirer.confirm(
@@ -701,7 +752,14 @@ def configure_rag():
 def run_pipeline(pipeline_id: str):
     """Configure and run a pipeline."""
     pipeline = PIPELINES[pipeline_id]
-    console.print(f"\n{pipeline['emoji']}  [bold]{pipeline['name']}[/bold]")
+    header_info = PIPELINE_HEADERS.get(pipeline_id)
+
+    # Display ASCII art header if available
+    if header_info:
+        console.print(f"[{header_info['color']}]{header_info['ascii']}[/{header_info['color']}]")
+    else:
+        console.print(f"\n{pipeline['emoji']}  [bold]{pipeline['name']}[/bold]")
+
     console.print(f"[dim]{pipeline['description']}[/dim]\n")
 
     cmd = None

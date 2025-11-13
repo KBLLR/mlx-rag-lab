@@ -154,3 +154,53 @@ Next Agent Task List
 - `91851bb` — docs: add Rhyme handoff entry (usability + MLX alignment)
 - `fa9e284` — feat: upgrade to Python 3.13.9 with full MLX ecosystem support
 - `80b2030` — merge: Python 3.13 upgrade to main (all tests passing)
+
+## Entry: 2025-11-13 — "Vision" (Agent codename: `PipelineArchitect`)
+
+**Summary**
+- Enhanced mlxlab CLI with ASCII art headers for all pipelines (RAG, Flux, MusicGen, Whisper, Benchmark)
+- Fixed quantized models KeyError in model listing
+- Improved RAG vector database error messages with clear instructions
+- **Created three new pipeline projects** following template structure:
+  - `vision-pipeline`: Phi-3-Vision multimodal RAG with architectural decisions documented
+  - `t5-pipeline`: Text-to-text transformation (translation, summarization, QA)
+  - `llasa-pipeline`: Audio-aware LLM for Whisper transcription enhancement
+- **Started vision-pipeline implementation**:
+  - Audited Phi-3-Vision-MLX codebase (VP-001)
+  - Created `phi3_vision_backend.py` with graceful dependency handling (VP-002)
+
+**Architecture Decisions (Vision Pipeline)**
+1. **Integration**: Unified RAG CLI with subcommands (`text`, `vision`, `multimodal`), not separate binaries
+2. **Storage**: Split indexes (`text_vdb.npz`, `image_vdb.npz`, `multimodal_meta.json`)
+3. **Model Wrapper**: Thin local wrapper around Phi-3-Vision-MLX backend for swappability
+4. **Image Formats**: Phase 1 supports `.png`, `.jpg`, `.jpeg`, `.webp` + URLs (download to cache)
+
+**Next Agent To-Do**
+1. **Install vision dependencies** (HIGH PRIORITY): `uv add gradio starlette datasets` to enable phi3_vision_backend
+2. **Create phi3_vision_embedder.py** (VP-003): High-level embedding API for RAG integration
+3. **Refactor rag-cli to subcommands** (VP-004): Add `text`, `vision`, `multimodal` modes
+4. **Create src/rag/vision/ module** (VP-005): Vision-specific RAG logic
+5. **Test T5 and Llasa models**: Verify they load correctly before implementing their CLIs
+
+**Notes**
+- All three pipeline projects have comprehensive READMEs with goals, architecture, and 20+ prioritized tasks
+- Vision backend is functional but blocked by missing dependencies (gradio, starlette, datasets)
+- T5 pipeline designed as standalone CLI with optional RAG integration utilities
+- Llasa pipeline designed to integrate with Whisper for transcription enhancement
+- Each pipeline aligns with MLX ecosystem patterns (native MLX, quantization, etc.)
+
+**Files Created**
+- `apps/mlxlab_cli.py` — Enhanced with ASCII headers and error fixes
+- `docs/projects/vision-pipeline/README.md` — Vision pipeline architecture (4KB)
+- `docs/projects/vision-pipeline/tasks.md` — 20 prioritized tasks
+- `docs/projects/t5-pipeline/README.md` — T5 pipeline architecture (5KB)
+- `docs/projects/t5-pipeline/tasks.md` — 20 prioritized tasks
+- `docs/projects/llasa-pipeline/README.md` — Llasa pipeline architecture (5KB)
+- `docs/projects/llasa-pipeline/tasks.md` — 20 prioritized tasks
+- `src/rag/models/phi3_vision_backend.py` — Phi-3-Vision wrapper (8KB)
+
+**Key Insights**
+- User prefers unified interfaces (subcommands) over proliferation of separate CLIs
+- Multimodal RAG requires explicit split of text/image embeddings with unified metadata
+- Gradual dependency installation approach: core functionality first, vision extras optional
+- All models already downloaded locally, just need proper wrappers and CLIs

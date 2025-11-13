@@ -1,3 +1,6 @@
+# GitHub specific files (keep local only)
+.github/
+
 # Python
 __pycache__/
 *.pyc
