@@ -7,13 +7,22 @@ import json
 from pathlib import Path
 from typing import List, Dict
 
-from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from rich.panel import Panel
 import statistics
 
-console = Console()
+from apps.ui import (
+    get_console,
+    render_header,
+    render_footer,
+    render_confidence_bars,
+    show_confidence_warning,
+    truncate_source_path,
+    get_confidence_color,
+)
+
+console = get_console()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -140,28 +149,8 @@ def classify_vdb_chunks(
     return results
 
 
-def truncate_source_path(path: str, max_len: int = 40) -> str:
-    """Smart path truncation keeping important parts."""
-    if len(path) <= max_len:
-        return path
-
-    parts = path.split('/')
-    filename = parts[-1]
-
-    if len(filename) > max_len - 10:
-        return f".../{filename[:max_len-13]}..."
-
-    remaining = max_len - len(filename) - 4
-    start_chars = remaining // 2
-
-    if start_chars > 0:
-        return f"{path[:start_chars]}.../{filename}"
-    else:
-        return f".../{filename}"
-
-
-def render_confidence_bars(predictions: List[Dict], max_width: int = 15) -> str:
-    """Render horizontal bar chart for confidence scores."""
+def render_confidence_bars_string(predictions: List[Dict], max_width: int = 15) -> str:
+    """Render horizontal bar chart for confidence scores as a string for table cells."""
     bars = []
     for pred in predictions:
         label = pred['label']
@@ -169,14 +158,8 @@ def render_confidence_bars(predictions: List[Dict], max_width: int = 15) -> str:
         filled = int(score * max_width)
         bar = "█" * filled + "░" * (max_width - filled)
 
-        # Color code by score
-        if score > 0.5:
-            color = "green"
-        elif score > 0.3:
-            color = "yellow"
-        else:
-            color = "red"
-
+        # Use shared color function
+        color = get_confidence_color(score)
         bars.append(f"[{color}]{bar}[/{color}] {label} ({score:.1%})")
 
     return "\n".join(bars)
@@ -214,12 +197,19 @@ def detect_low_confidence(results: List[Dict]) -> Dict:
     }
 
 
-def display_results(results: List[Dict], top_k: int = 3):
+def display_results(results: List[Dict], top_k: int = 3, mode: str = "sentiment", vdb_path: str = None):
     """Display classification results in a table with confidence visualization."""
     if not results:
         console.print("[yellow]No results matched the criteria (possibly min-score threshold too high)[/yellow]")
         console.print("[dim]Try lowering --min-score to 0.0 to see all results[/dim]")
         return
+
+    # Render header with metadata
+    meta = {"Mode": mode.title()}
+    if vdb_path:
+        meta["VDB"] = Path(vdb_path).name
+    meta["Results"] = len(results)
+    render_header("Classification Results", meta)
 
     # Check for low confidence patterns
     confidence_analysis = detect_low_confidence(results)
@@ -242,17 +232,17 @@ Statistics:
         console.print(Panel(warning_msg, border_style="yellow", title="Confidence Warning"))
         console.print()
 
-    table = Table(title="Classification Results", show_header=True, header_style="bold magenta")
+    table = Table(show_header=True, header_style="bold magenta", title_style="bold cyan")
     table.add_column("Text", style="cyan", no_wrap=False, max_width=40)
     table.add_column("Source", style="dim", max_width=35)
-    table.add_column("Confidence Bars", style="white", no_wrap=False)
+    table.add_column("Confidence", style="white", no_wrap=False)
 
     for result in results[:20]:  # Show first 20
         text = result["text"]
-        source = truncate_source_path(result.get("source", "N/A"))
+        source = truncate_source_path(result.get("source", "N/A"), max_len=35)
 
         # Format predictions with bars
-        bars = render_confidence_bars(result["predictions"][:top_k])
+        bars = render_confidence_bars_string(result["predictions"][:top_k])
 
         table.add_row(text, source, bars)
 
@@ -261,14 +251,19 @@ Statistics:
     if len(results) > 20:
         console.print(f"\n[dim]... and {len(results) - 20} more results[/dim]")
 
+    # Show footer with helpful hints
+    render_footer(["Use --output to save results", "Use --min-score to filter", "Use --top-k to limit predictions"])
+
 
 def interactive_mode(classifier, mode: str, labels: List[str]):
     """Interactive classification mode."""
-    console.print("\n[bold cyan]Interactive Classification Mode[/bold cyan]")
-    console.print(f"[dim]Mode: {mode}[/dim]")
+    meta = {"Mode": mode.title()}
     if labels and mode == "zero-shot":
-        console.print(f"[dim]Labels: {', '.join(labels)}[/dim]")
-    console.print("\n[dim]Type text to classify (Ctrl+C to exit)[/dim]\n")
+        meta["Labels"] = ", ".join(labels[:3]) + ("..." if len(labels) > 3 else "")
+    render_header("Interactive Classification", meta)
+
+    render_footer(["Type text to classify", "Ctrl+C to exit"])
+    console.print()
 
     while True:
         try:
@@ -368,7 +363,7 @@ def main() -> None:
 
     # Display results
     console.print()
-    display_results(results, args.top_k)
+    display_results(results, args.top_k, mode=args.mode, vdb_path=str(args.vdb_path) if args.vdb_path else None)
 
     # Save results if requested
     if args.output:
