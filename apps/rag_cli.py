@@ -11,7 +11,7 @@ from rag.models.qwen_reranker import QwenReranker
 from rag.retrieval.vdb import VectorDB
 
 
-DEFAULT_VDB_PATH = Path("models/indexes/vdb.npz")
+DEFAULT_VDB_PATH = Path("var/indexes/vdb.npz")
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
 DEFAULT_RERANKER_ID = "mlx-community/mxbai-rerank-large-v2"
 

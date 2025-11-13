@@ -29,18 +29,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vdb",
         type=str,
-        default="models/indexes/vdb.npz", # Updated default VDB
+        default="var/indexes/vdb.npz", # Updated default VDB
         help="The path to read the vector DB",
     )
     parser.add_argument(
         "--bank",
         type=str,
-        help="Optional knowledge bank name (loads models/indexes/<bank>/vdb.npz). Overrides --vdb.",
+        help="Optional knowledge bank name (loads var/indexes/<bank>/vdb.npz). Overrides --vdb.",
     )
     parser.add_argument(
         "--indexes-dir",
         type=str,
-        default="models/indexes",
+        default="var/indexes",
         help="Root directory for per-bank indexes.",
     )
     # Model

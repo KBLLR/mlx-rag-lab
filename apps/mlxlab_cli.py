@@ -80,6 +80,17 @@ PIPELINE_HEADERS = {
         """,
         "color": "bold red",
     },
+    "ingest": {
+        "ascii": """
+    ██╗███╗   ██╗ ██████╗ ███████╗███████╗████████╗
+    ██║████╗  ██║██╔════╝ ██╔════╝██╔════╝╚══██╔══╝
+    ██║██╔██╗ ██║██║  ███╗█████╗  ███████╗   ██║
+    ██║██║╚██╗██║██║   ██║██╔══╝  ╚════██║   ██║
+    ██║██║ ╚████║╚██████╔╝███████╗███████║   ██║
+    ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝   ╚═╝
+        """,
+        "color": "bold blue",
+    },
 }
 
 # Pipeline metadata
@@ -113,6 +124,12 @@ PIPELINES = {
         "description": "Run benchmarks on MLX models",
         "emoji": "📊",
         "command": "bench-cli",
+    },
+    "ingest": {
+        "name": "Ingest - Build Vector Index",
+        "description": "Create vector database from documents",
+        "emoji": "📚",
+        "command": "ingest-cli",
     },
 }
 
@@ -710,18 +727,166 @@ def configure_flux():
     return cmd
 
 
+def get_indexed_files():
+    """Scan all metadata files and return set of already-indexed PDF paths."""
+    indexed_files = set()
+    indexes_dir = Path("var/indexes")
+
+    if not indexes_dir.exists():
+        return indexed_files
+
+    # Find all metadata files
+    for meta_file in indexes_dir.rglob("*.meta.json"):
+        try:
+            with open(meta_file) as f:
+                import json
+                metadata = json.load(f)
+                # Add all document_names to the set
+                if "document_names" in metadata:
+                    for doc in metadata["document_names"]:
+                        indexed_files.add(Path(doc).resolve())
+        except Exception:
+            continue
+
+    return indexed_files
+
+
+def scan_new_files():
+    """Scan for new PDF files that haven't been indexed yet."""
+    source_dir = Path("var/source_docs")
+
+    if not source_dir.exists():
+        return {}, {}
+
+    # Get all PDFs grouped by bank (subdirectory)
+    all_files_by_bank = {}
+    for pdf_file in source_dir.rglob("*.pdf"):
+        # Get bank name (immediate parent directory)
+        bank = pdf_file.parent.name
+        if bank not in all_files_by_bank:
+            all_files_by_bank[bank] = []
+        all_files_by_bank[bank].append(pdf_file.resolve())
+
+    # Get already indexed files
+    indexed = get_indexed_files()
+
+    # Find new files
+    new_files_by_bank = {}
+    for bank, files in all_files_by_bank.items():
+        new_files = [f for f in files if f not in indexed]
+        if new_files:
+            new_files_by_bank[bank] = new_files
+
+    return new_files_by_bank, all_files_by_bank
+
+
+def configure_ingest():
+    """Interactive configuration for ingestion pipeline with smart file detection."""
+    console.print("\n[bold blue]📚 Ingestion Configuration[/bold blue]\n")
+
+    # Scan for new files
+    new_files_by_bank, all_files_by_bank = scan_new_files()
+
+    if not all_files_by_bank:
+        console.print("[yellow]No PDF files found in var/source_docs/[/yellow]\n")
+        console.print("[dim]To ingest documents:[/dim]")
+        console.print("[dim]  1. Create knowledge banks: var/source_docs/<bank-name>/[/dim]")
+        console.print("[dim]  2. Place PDFs in each bank directory[/dim]")
+        console.print("[dim]  3. Run ingestion to build indexes[/dim]")
+        input("\n[dim]Press Enter to continue...[/dim]")
+        return None
+
+    # Show statistics
+    total_files = sum(len(files) for files in all_files_by_bank.values())
+    total_new = sum(len(files) for files in new_files_by_bank.values())
+    total_indexed = total_files - total_new
+
+    console.print(f"[cyan]Found {len(all_files_by_bank)} knowledge banks with {total_files} PDFs[/cyan]")
+    console.print(f"[green]✓ Already indexed: {total_indexed} files[/green]")
+    console.print(f"[yellow]⚡ New files to ingest: {total_new} files[/yellow]\n")
+
+    if not new_files_by_bank:
+        console.print("[green]✓ All files are already indexed![/green]")
+
+        reindex = inquirer.confirm(
+            message="Re-index everything anyway?", default=False
+        ).execute()
+
+        if not reindex:
+            input("\n[dim]Press Enter to continue...[/dim]")
+            return None
+    else:
+        # Show new files by bank
+        console.print("[bold]New files to ingest:[/bold]")
+        for bank, files in new_files_by_bank.items():
+            console.print(f"  [cyan]{bank}:[/cyan] {len(files)} new files")
+
+    console.print()
+
+    # Choose ingestion mode
+    mode = inquirer.select(
+        message="What would you like to ingest?",
+        choices=[
+            Choice("new", name="⚡ Only new files (smart mode)"),
+            Choice("all", name="🔄 Re-index everything"),
+            Choice("select", name="📂 Select specific banks"),
+            Choice("cancel", name="❌ Cancel"),
+        ],
+        default="new"
+    ).execute()
+
+    if mode == "cancel":
+        return None
+
+    if mode == "select":
+        # Let user choose which banks to process
+        bank_choices = [
+            Choice(bank, name=f"{bank} ({len(files)} files)")
+            for bank, files in all_files_by_bank.items()
+        ]
+        selected_banks = inquirer.checkbox(
+            message="Select banks to ingest:",
+            choices=bank_choices,
+        ).execute()
+
+        if not selected_banks:
+            console.print("[yellow]No banks selected.[/yellow]")
+            input("\n[dim]Press Enter to continue...[/dim]")
+            return None
+
+        # Build command for selected banks
+        cmd = f"uv run ingest-cli --banks-root var/source_docs --output-dir var/indexes"
+        console.print(f"\n[dim]Note: Will process selected banks: {', '.join(selected_banks)}[/dim]")
+
+    elif mode == "new":
+        # Ingest only new files (create temporary list)
+        if not new_files_by_bank:
+            console.print("[yellow]No new files to ingest.[/yellow]")
+            input("\n[dim]Press Enter to continue...[/dim]")
+            return None
+
+        cmd = f"uv run ingest-cli --banks-root var/source_docs --output-dir var/indexes"
+        console.print(f"\n[dim]Will process {total_new} new files across {len(new_files_by_bank)} banks[/dim]")
+
+    else:  # mode == "all"
+        cmd = f"uv run ingest-cli --banks-root var/source_docs --output-dir var/indexes"
+        console.print(f"\n[dim]Will re-index all {total_files} files across {len(all_files_by_bank)} banks[/dim]")
+
+    return cmd
+
+
 def configure_rag():
     """Interactive configuration for RAG pipeline."""
     console.print("\n[bold cyan]🔍 RAG Configuration[/bold cyan]\n")
 
-    vdb_path = Path("models/indexes/vdb.npz")
+    vdb_path = Path("var/indexes/vdb.npz")
     if not vdb_path.exists():
-        console.print("[red]Vector database not found at models/indexes/vdb.npz[/red]")
+        console.print("[red]Vector database not found at var/indexes/vdb.npz[/red]")
         console.print("[yellow]You need to ingest documents first.[/yellow]\n")
         console.print("[dim]To create a vector database:[/dim]")
-        console.print("[dim]  1. Place your documents in the data/ directory[/dim]")
-        console.print("[dim]  2. Run: uv run ingest-cli[/dim]")
-        console.print("[dim]  3. This will create the vector index at models/indexes/vdb.npz[/dim]")
+        console.print("[dim]  1. Place your documents in var/source_docs/<bank-name>/[/dim]")
+        console.print("[dim]  2. Run: 📚 Ingest - Build Vector Index from the main menu[/dim]")
+        console.print("[dim]  3. This will create indexes at var/indexes/<bank-name>/vdb.npz[/dim]")
         return None
 
     use_reranker = inquirer.confirm(
@@ -771,6 +936,8 @@ def run_pipeline(pipeline_id: str):
         cmd = configure_flux()
     elif pipeline_id == "rag":
         cmd = configure_rag()
+    elif pipeline_id == "ingest":
+        cmd = configure_ingest()
     elif pipeline_id == "bench":
         console.print("[yellow]Benchmark CLI doesn't have interactive config yet[/yellow]")
         cmd = "uv run bench-cli --help"
@@ -807,6 +974,7 @@ def main_menu():
             choices=[
                 Separator("═══ PIPELINES ═══"),
                 Choice("rag", name="🔍 RAG - Question Answering"),
+                Choice("ingest", name="📚 Ingest - Build Vector Index"),
                 Choice("flux", name="🎨 Flux - Image Generation"),
                 Choice("musicgen", name="🎵 MusicGen - Audio Generation"),
                 Choice("whisper", name="🎙️  Whisper - Speech-to-Text"),

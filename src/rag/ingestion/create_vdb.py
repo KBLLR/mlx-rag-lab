@@ -190,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vdb",
         type=str,
-        default="models/indexes/combined_vdb.npz",
+        default="var/indexes/combined_vdb.npz",
         help="Output path when using --pdfs (ignored for --banks-root).",
     )
     parser.add_argument(
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="models/indexes",
+        default="var/indexes",
         help="Directory where per-bank indexes are written when using --banks-root.",
     )
     parser.add_argument(

@@ -23,6 +23,11 @@ Requires-Dist: Pillow
 Requires-Dist: sentencepiece
 Requires-Dist: datasets
 Requires-Dist: mlx-data>=0.2.0
+Requires-Dist: tiktoken>=0.5.1
+Requires-Dist: more-itertools>=9.0
+Requires-Dist: numba>=0.58
+Requires-Dist: scipy>=1.11
+Requires-Dist: InquirerPy>=0.3.4
 Provides-Extra: pdf
 Requires-Dist: unstructured[pdf]~=0.18.15; extra == "pdf"
 Dynamic: license-file

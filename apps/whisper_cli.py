@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # Import from existing MLX Whisper implementation
-sys.path.insert(0, str(Path(__file__).parent.parent / "mlx-models" / "whisper"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "examples" / "whisper"))
 from mlx_whisper import transcribe
 
 DEFAULT_MODEL = "mlx-community/whisper-large-v3"

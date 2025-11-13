@@ -13,7 +13,17 @@ class MLXModelEngine:
 
     def _load_model(self, **kwargs: Any) -> None:
         if self.model_type == "text":
-            self.model, self.tokenizer = load(self.model_id, **kwargs)
+            # Use corrected tokenization behavior (not legacy mode)
+            # See: https://github.com/huggingface/transformers/pull/24565
+            tokenizer_config = kwargs.pop("tokenizer_config", {})
+            if "legacy" not in tokenizer_config:
+                tokenizer_config["legacy"] = False
+
+            self.model, self.tokenizer = load(
+                self.model_id,
+                tokenizer_config=tokenizer_config,
+                **kwargs
+            )
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
 
