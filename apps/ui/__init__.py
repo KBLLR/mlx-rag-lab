@@ -8,6 +8,7 @@ from apps.ui.components import (
     render_task_progress,
     show_confidence_warning,
     show_system_warning,
+    render_chat_message,
 )
 from apps.ui.utils import truncate_source_path, get_confidence_color
 
@@ -19,6 +20,7 @@ __all__ = [
     "render_task_progress",
     "show_confidence_warning",
     "show_system_warning",
+    "render_chat_message",
     "truncate_source_path",
     "get_confidence_color",
 ]
