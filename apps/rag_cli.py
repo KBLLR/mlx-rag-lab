@@ -7,9 +7,9 @@ from pathlib import Path
 from textwrap import shorten
 
 from libs.mlx_core.model_engine import MLXModelEngine
+from rag.chat.templates import strip_channel_controls
 from rag.models.qwen_reranker import QwenReranker
 from rag.retrieval.vdb import VectorDB
-
 
 DEFAULT_VDB_PATH = Path("var/indexes/vdb.npz")
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
@@ -168,7 +168,10 @@ def main() -> None:
         print("\n🔎 Retrieved context:")
         print(summary or "(empty)")
         print("\n💬 Answer:")
-        print(json.dumps(answer, indent=2) if isinstance(answer, (dict, list)) else answer)
+        if isinstance(answer, (dict, list)):
+            print(json.dumps(answer, indent=2, ensure_ascii=False))
+        else:
+            print(strip_channel_controls(answer))
         print("\n" + "-" * 60 + "\n")
 
 

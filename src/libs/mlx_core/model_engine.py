@@ -1,7 +1,10 @@
 import json
-from typing import Any, List, Union, Iterator, Dict
-from mlx_lm import load, generate, stream_generate
 import os
+from typing import Any, Dict, Iterator, List, Union
+
+from mlx_lm import generate, load, stream_generate
+
+from rag.chat.templates import strip_channel_controls
 
 class MLXModelEngine:
     def __init__(self, model_id: str, model_type: str = "text", **kwargs: Any) -> None:
@@ -33,7 +36,7 @@ class MLXModelEngine:
         else:
             text = str(output)
 
-        text = text.strip()
+        text = strip_channel_controls(text.strip())
 
         # Attempt to parse as JSON first
         try:

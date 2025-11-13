@@ -5,6 +5,7 @@ Unified interface with model management, quantization, and cache control.
 """
 
 import gc
+import shlex
 import shutil
 import signal
 import subprocess
@@ -20,6 +21,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+
+from experiments.dataset_generation.generate_qa_dataset import (
+    QAGenerationConfig,
+    generate_qa_dataset,
+)
 
 console = Console()
 
@@ -91,6 +97,50 @@ PIPELINE_HEADERS = {
         """,
         "color": "bold blue",
     },
+    "classify": {
+        "ascii": """
+     ██████╗██╗      █████╗ ███████╗███████╗██╗███████╗██╗   ██╗
+    ██╔════╝██║     ██╔══██╗██╔════╝██╔════╝██║██╔════╝╚██╗ ██╔╝
+    ██║     ██║     ███████║███████╗███████╗██║█████╗   ╚████╔╝
+    ██║     ██║     ██╔══██║╚════██║╚════██║██║██╔══╝    ╚██╔╝
+    ╚██████╗███████╗██║  ██║███████║███████║██║██║        ██║
+     ╚═════╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝╚═╝        ╚═╝
+        """,
+        "color": "bold bright_magenta",
+    },
+    "chat": {
+        "ascii": """
+     ██████╗██╗  ██╗ █████╗ ████████╗
+    ██╔════╝██║  ██║██╔══██╗╚══██╔══╝
+    ██║     ███████║███████║   ██║
+    ██║     ██╔══██║██╔══██║   ██║
+    ╚██████╗██║  ██║██║  ██║   ██║
+     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝
+        """,
+        "color": "bold green",
+    },
+    "voice_chat": {
+        "ascii": """
+    ██╗   ██╗ ██████╗ ██╗ ██████╗███████╗
+    ██║   ██║██╔═══██╗██║██╔════╝██╔════╝
+    ██║   ██║██║   ██║██║██║     █████╗
+    ╚██╗ ██╔╝██║   ██║██║██║     ██╔══╝
+     ╚████╔╝ ╚██████╔╝██║╚██████╗███████╗
+      ╚═══╝   ╚═════╝ ╚═╝ ╚═════╝╚══════╝
+        """,
+        "color": "bold bright_green",
+    },
+    "sts_avatar": {
+        "ascii": """
+    ███████╗████████╗███████╗     █████╗ ██╗   ██╗ █████╗ ████████╗ █████╗ ██████╗
+    ██╔════╝╚══██╔══╝██╔════╝    ██╔══██╗██║   ██║██╔══██╗╚══██╔══╝██╔══██╗██╔══██╗
+    ███████╗   ██║   ███████╗    ███████║██║   ██║███████║   ██║   ███████║██████╔╝
+    ╚════██║   ██║   ╚════██║    ██╔══██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══██║██╔══██╗
+    ███████║   ██║   ███████║    ██║  ██║ ╚████╔╝ ██║  ██║   ██║   ██║  ██║██║  ██║
+    ╚══════╝   ╚═╝   ╚══════╝    ╚═╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+        """,
+        "color": "bold bright_cyan",
+    },
 }
 
 # Pipeline metadata
@@ -131,6 +181,30 @@ PIPELINES = {
         "emoji": "📚",
         "command": "ingest-cli",
     },
+    "classify": {
+        "name": "Classify - Text Classification",
+        "description": "Sentiment analysis and text classification",
+        "emoji": "🏷️",
+        "command": "classify-cli",
+    },
+    "chat": {
+        "name": "Chat - Conversational AI",
+        "description": "Chat interface with GPT-OSS 20B or other LLMs",
+        "emoji": "💬",
+        "command": "chat-cli",
+    },
+    "voice_chat": {
+        "name": "Voice Chat - Text to Speech",
+        "description": "Chat with TTS audio responses (Marvis/Kokoro)",
+        "emoji": "🗣️",
+        "command": "voice-chat-cli",
+    },
+    "sts_avatar": {
+        "name": "STS Avatar - Speech to Speech",
+        "description": "Full voice pipeline with viseme output for avatars",
+        "emoji": "🎭",
+        "command": "sts-avatar-cli",
+    },
 }
 
 # Correct model names with real available models
@@ -167,6 +241,7 @@ MODELS = {
     ],
     "rag": [
         ("mlx-community/Phi-3-mini-4k-instruct-4bit", "~2.4GB", "Quantized LLM"),
+        ("mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx", "~12GB", "GPT-OSS 20B (MXFP4 4-bit)"),
         ("mlx-community/mxbai-rerank-large-v2", "~1.2GB", "Cross-encoder reranker"),
         ("mlx-community/Llama-3.2-3B-Instruct-4bit", "~1.9GB", "Alternative LLM"),
     ],
@@ -879,15 +954,50 @@ def configure_rag():
     """Interactive configuration for RAG pipeline."""
     console.print("\n[bold cyan]🔍 RAG Configuration[/bold cyan]\n")
 
-    vdb_path = Path("var/indexes/vdb.npz")
-    if not vdb_path.exists():
-        console.print("[red]Vector database not found at var/indexes/vdb.npz[/red]")
+    # Scan for available vector databases
+    indexes_dir = Path("var/indexes")
+    if not indexes_dir.exists():
+        console.print("[red]No indexes directory found at var/indexes/[/red]")
         console.print("[yellow]You need to ingest documents first.[/yellow]\n")
         console.print("[dim]To create a vector database:[/dim]")
         console.print("[dim]  1. Place your documents in var/source_docs/<bank-name>/[/dim]")
         console.print("[dim]  2. Run: 📚 Ingest - Build Vector Index from the main menu[/dim]")
         console.print("[dim]  3. This will create indexes at var/indexes/<bank-name>/vdb.npz[/dim]")
+        input("\n[dim]Press Enter to continue...[/dim]")
         return None
+
+    # Find all available banks
+    available_banks = []
+
+    # Check for bank-specific indexes
+    for bank_dir in sorted(indexes_dir.iterdir()):
+        if bank_dir.is_dir():
+            vdb_file = bank_dir / "vdb.npz"
+            if vdb_file.exists():
+                available_banks.append((str(vdb_file), bank_dir.name))
+
+    # Check for old combined index
+    combined_vdb = indexes_dir / "vdb.npz"
+    if combined_vdb.exists():
+        available_banks.insert(0, (str(combined_vdb), "combined (all banks)"))
+
+    if not available_banks:
+        console.print("[red]No vector databases found in var/indexes/[/red]")
+        console.print("[yellow]You need to ingest documents first.[/yellow]\n")
+        input("\n[dim]Press Enter to continue...[/dim]")
+        return None
+
+    # Let user choose which bank to query
+    bank_choices = [
+        Choice(path, name=f"📁 {name}")
+        for path, name in available_banks
+    ]
+
+    selected_vdb = inquirer.select(
+        message="Select knowledge bank to query:",
+        choices=bank_choices,
+        default=bank_choices[0].value,
+    ).execute()
 
     use_reranker = inquirer.confirm(
         message="Use reranker? (slower but more accurate)", default=False
@@ -901,7 +1011,12 @@ def configure_rag():
         message="Max tokens for answer:", min_allowed=128, max_allowed=2048, default=512
     ).execute()
 
-    cmd_parts = ["uv run rag-cli", f"--top-k {top_k}", f"--max-tokens {max_tokens}"]
+    cmd_parts = [
+        "uv run rag-cli",
+        f"--vdb-path {selected_vdb}",
+        f"--top-k {top_k}",
+        f"--max-tokens {max_tokens}"
+    ]
 
     if not use_reranker:
         cmd_parts.append("--no-reranker")
@@ -912,6 +1027,624 @@ def configure_rag():
     console.print(f"[dim]Command: {cmd}[/dim]\n")
 
     return cmd
+
+
+def configure_classify():
+    """Interactive configuration for classification pipeline."""
+    console.print("\n[bold cyan]🏷️  Text Classification Configuration[/bold cyan]\n")
+
+    # Scan for available vector databases
+    indexes_dir = Path("var/indexes")
+    available_banks = []
+
+    if indexes_dir.exists():
+        # Check for bank-specific indexes
+        for bank_dir in sorted(indexes_dir.iterdir()):
+            if bank_dir.is_dir():
+                vdb_file = bank_dir / "vdb.npz"
+                if vdb_file.exists():
+                    available_banks.append((str(vdb_file), bank_dir.name))
+
+        # Check for old combined index
+        combined_vdb = indexes_dir / "vdb.npz"
+        if combined_vdb.exists():
+            available_banks.insert(0, (str(combined_vdb), "combined (all banks)"))
+
+    # Select classification mode
+    mode = inquirer.select(
+        message="Select classification mode:",
+        choices=[
+            Choice("sentiment", name="😊 Sentiment Analysis (positive/negative/neutral)"),
+            Choice("emotion", name="❤️  Emotion Detection (joy/sadness/anger/fear/surprise)"),
+            Choice("zero-shot", name="🎯 Zero-shot Classification (custom labels)"),
+            Choice("interactive", name="💬 Interactive Mode (classify text in real-time)"),
+        ],
+        default="sentiment",
+    ).execute()
+
+    # Interactive mode doesn't need VDB
+    if mode == "interactive":
+        cmd = f"uv run classify-cli --mode interactive"
+        console.print(f"\n[green]Starting Interactive Classification Mode[/green]")
+        console.print(f"[dim]Type text to classify in real-time. Press Ctrl+C to exit.[/dim]\n")
+        return cmd
+
+    # Choose input source
+    source = inquirer.select(
+        message="Select input source:",
+        choices=[
+            Choice("vdb", name="📁 Vector Database Chunks"),
+            Choice("text", name="📝 Single Text Input"),
+            Choice("cancel", name="❌ Cancel"),
+        ],
+        default="vdb" if available_banks else "text",
+    ).execute()
+
+    if source == "cancel":
+        return None
+
+    cmd_parts = ["uv run classify-cli", f"--mode {mode}"]
+
+    if source == "vdb":
+        if not available_banks:
+            console.print("[red]No vector databases found in var/indexes/[/red]")
+            console.print("[yellow]You need to ingest documents first, or use text input.[/yellow]\n")
+            input("\n[dim]Press Enter to continue...[/dim]")
+            return None
+
+        # Let user choose which bank to classify
+        bank_choices = [
+            Choice(path, name=f"📁 {name}")
+            for path, name in available_banks
+        ]
+
+        selected_vdb = inquirer.select(
+            message="Select knowledge bank to classify:",
+            choices=bank_choices,
+            default=bank_choices[0].value,
+        ).execute()
+
+        cmd_parts.append(f"--vdb-path {selected_vdb}")
+
+    elif source == "text":
+        text = inquirer.text(
+            message="Enter text to classify:",
+            default="This is a great product! I love it!"
+        ).execute()
+
+        if not text.strip():
+            console.print("[yellow]No text provided.[/yellow]")
+            input("\n[dim]Press Enter to continue...[/dim]")
+            return None
+
+        cmd_parts.append(f'--text "{text}"')
+
+    # Zero-shot mode requires labels
+    if mode == "zero-shot":
+        labels_input = inquirer.text(
+            message="Enter classification labels (space-separated):",
+            default="technology science politics sports"
+        ).execute()
+
+        if labels_input.strip():
+            cmd_parts.append(f"--labels {labels_input}")
+        else:
+            console.print("[yellow]Zero-shot mode requires labels. Using sentiment analysis instead.[/yellow]")
+            cmd_parts[1] = "--mode sentiment"
+
+    # Additional options
+    top_k = int(inquirer.number(
+        message="Number of top predictions to show:",
+        min_allowed=1,
+        max_allowed=10,
+        default=3
+    ).execute())
+    cmd_parts.append(f"--top-k {top_k}")
+
+    min_score = float(inquirer.number(
+        message="Minimum confidence threshold (0.0-1.0):",
+        min_allowed=0.0,
+        max_allowed=1.0,
+        default=0.0,
+        float_allowed=True
+    ).execute())
+
+    if min_score > 0:
+        cmd_parts.append(f"--min-score {min_score}")
+
+    # Ask if user wants to save results
+    save_output = inquirer.confirm(
+        message="Save results to JSON file?",
+        default=False
+    ).execute()
+
+    if save_output:
+        output_path = inquirer.text(
+            message="Output file path:",
+            default="var/classifications/results.json"
+        ).execute()
+        cmd_parts.append(f"--output {output_path}")
+
+    cmd = " ".join(cmd_parts)
+
+    console.print(f"\n[green]Starting Classification Pipeline[/green]")
+    console.print(f"[dim]Command: {cmd}[/dim]\n")
+
+    return cmd
+
+
+def configure_chat():
+    """Interactive configuration for chat pipeline."""
+    console.print("\n[bold green]💬 Chat Configuration[/bold green]\n")
+
+    # Check if local GPT-OSS exists
+    local_gpt_oss = Path("mlx-models/gpt-oss-20b-mxfp4")
+    default_model = str(local_gpt_oss) if local_gpt_oss.exists() else "mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx"
+
+    # Model selection
+    model_choices = [
+        Choice(str(local_gpt_oss), name=f"🚀 GPT-OSS 20B (local) - {local_gpt_oss}") if local_gpt_oss.exists() else None,
+        Choice("mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx", name="☁️  GPT-OSS 20B (HuggingFace)"),
+        Choice("mlx-community/Phi-3-mini-4k-instruct-4bit", name="⚡ Phi-3 Mini 4k (faster, smaller)"),
+        Choice("mlx-community/Llama-3.2-3B-Instruct-4bit", name="🦙 Llama 3.2 3B"),
+    ]
+    model_choices = [c for c in model_choices if c is not None]
+
+    model_id = inquirer.select(
+        message="Select chat model:",
+        choices=model_choices,
+        default=default_model if any(c.value == default_model for c in model_choices) else model_choices[0].value
+    ).execute()
+
+    # Generation settings
+    max_tokens = int(inquirer.number(
+        message="Max tokens per response:",
+        min_allowed=128,
+        max_allowed=2048,
+        default=512
+    ).execute())
+
+    temperature = float(inquirer.number(
+        message="Temperature (0.0-1.0, higher = more creative):",
+        min_allowed=0.0,
+        max_allowed=1.0,
+        default=0.7,
+        float_allowed=True
+    ).execute())
+
+    stream = inquirer.confirm(
+        message="Enable streaming (show tokens as they generate)?",
+        default=False
+    ).execute()
+
+    save_chat = inquirer.confirm(
+        message="Save conversation history on exit?",
+        default=True
+    ).execute()
+
+    classify_on_exit = inquirer.confirm(
+        message="Classify conversation (sentiment/topics) on exit?",
+        default=True
+    ).execute()
+
+    # Build command
+    cmd_parts = [
+        "uv run chat-cli",
+        f"--model-id {model_id}",
+        f"--max-tokens {max_tokens}",
+        f"--temperature {temperature}"
+    ]
+
+    if stream:
+        cmd_parts.append("--stream")
+
+    if save_chat:
+        cmd_parts.append("--save-chat")
+
+    if classify_on_exit:
+        cmd_parts.append("--classify-on-exit")
+
+    cmd = " ".join(cmd_parts)
+
+    console.print(f"\n[green]Starting Chat Interface[/green]")
+    console.print(f"[dim]Command: {cmd}[/dim]\n")
+    console.print("[dim]Special commands in chat:[/dim]")
+    console.print("[dim]  /clear  - Clear conversation history[/dim]")
+    console.print("[dim]  /history - Show conversation history[/dim]")
+    console.print("[dim]  /exit   - Exit chat[/dim]\n")
+
+    return cmd
+
+
+def configure_voice_chat():
+    """Interactive configuration for voice chat pipeline."""
+    console.print("\n[bold green]🗣️  Voice Chat Configuration[/bold green]\n")
+
+    # Check if local GPT-OSS exists
+    local_gpt_oss = Path("mlx-models/gpt-oss-20b-mxfp4")
+    default_model = str(local_gpt_oss) if local_gpt_oss.exists() else "mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx"
+
+    # Model selection
+    model_choices = [
+        Choice(str(local_gpt_oss), name=f"🚀 GPT-OSS 20B (local)") if local_gpt_oss.exists() else None,
+        Choice("mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx", name="☁️  GPT-OSS 20B (HuggingFace)"),
+        Choice("mlx-community/Phi-3-mini-4k-instruct-4bit", name="⚡ Phi-3 Mini (faster)"),
+    ]
+    model_choices = [c for c in model_choices if c is not None]
+
+    model_id = inquirer.select(
+        message="Select chat model:",
+        choices=model_choices,
+        default=default_model if any(c.value == default_model for c in model_choices) else model_choices[0].value
+    ).execute()
+
+    # TTS Engine
+    tts_engine = inquirer.select(
+        message="Select TTS engine:",
+        choices=[
+            Choice("kokoro", name="🎭 Kokoro TTS (54 voices, phoneme output)"),
+            Choice("marvis", name="🎤 Marvis TTS (simple, fast)"),
+        ],
+        default="kokoro"
+    ).execute()
+
+    # Voice selection (Kokoro only)
+    tts_voice = "af_bella"
+    if tts_engine == "kokoro":
+        tts_voice = inquirer.select(
+            message="Select voice:",
+            choices=[
+                Choice("af_bella", name="👩 Bella (American female)"),
+                Choice("af_sarah", name="👩 Sarah (American female)"),
+                Choice("am_adam", name="👨 Adam (American male)"),
+                Choice("am_fenrir", name="👨 Fenrir (American male)"),
+                Choice("bf_emma", name="👩 Emma (British female)"),
+                Choice("bm_george", name="👨 George (British male)"),
+            ],
+            default="af_bella"
+        ).execute()
+
+    # Generation settings
+    max_tokens = int(inquirer.number(
+        message="Max tokens per response:",
+        min_allowed=128,
+        max_allowed=512,
+        default=256
+    ).execute())
+
+    stream = inquirer.confirm(
+        message="Stream text before audio synthesis?",
+        default=True
+    ).execute()
+
+    live_mode = inquirer.confirm(
+        message="Enable push-to-talk mode (hold Space to talk)?",
+        default=False,
+    ).execute()
+
+    whisper_model = "mlx-community/whisper-large-v3-mlx"
+    if live_mode:
+        whisper_model = inquirer.select(
+            message="Select Whisper/STT model for push-to-talk:",
+            choices=[
+                Choice("mlx-community/whisper-large-v3-mlx", name="🎯 Large-v3 (best accuracy)"),
+                Choice("mlx-community/whisper-medium-mlx", name="⚡ Medium (balanced)"),
+                Choice("mlx-community/whisper-small-mlx", name="🚀 Small (fast)"),
+            ],
+            default="mlx-community/whisper-large-v3-mlx",
+        ).execute()
+
+    # Build command
+    cmd_parts = [
+        "uv run voice-chat-cli",
+        f"--chat-model {model_id}",
+        f"--tts-engine {tts_engine}",
+        f"--max-tokens {max_tokens}",
+        f"--whisper-model {whisper_model}",
+    ]
+
+    if tts_engine == "kokoro":
+        cmd_parts.append(f"--tts-voice {tts_voice}")
+
+    if stream:
+        cmd_parts.append("--stream")
+    if live_mode:
+        cmd_parts.append("--live")
+
+    cmd = " ".join(cmd_parts)
+
+    console.print(f"\n[green]Starting Voice Chat[/green]")
+    console.print(f"[dim]Command: {cmd}[/dim]\n")
+
+    return cmd
+
+
+def configure_sts_avatar():
+    """Interactive configuration for STS avatar pipeline."""
+    console.print("\n[bold cyan]🎭 STS Avatar Configuration[/bold cyan]\n")
+
+    def prompt_optional_int(message: str) -> Optional[int]:
+        """Helper for optional integer prompts."""
+        while True:
+            raw_value = (
+                inquirer.text(message=message, default="").execute().strip()
+            )
+            if raw_value == "":
+                return None
+            try:
+                return int(raw_value)
+            except ValueError:
+                console.print("[red]Enter a number or leave blank[/red]")
+
+    # Check if local GPT-OSS exists
+    local_gpt_oss = Path("mlx-models/gpt-oss-20b-mxfp4")
+    default_model = str(local_gpt_oss) if local_gpt_oss.exists() else "mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx"
+
+    # Model selection
+    model_choices = [
+        Choice(str(local_gpt_oss), name=f"🚀 GPT-OSS 20B (local)") if local_gpt_oss.exists() else None,
+        Choice("mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx", name="☁️  GPT-OSS 20B (HuggingFace)"),
+        Choice("mlx-community/Phi-3-mini-4k-instruct-4bit", name="⚡ Phi-3 Mini (faster)"),
+    ]
+    model_choices = [c for c in model_choices if c is not None]
+
+    model_id = inquirer.select(
+        message="Select chat model:",
+        choices=model_choices,
+        default=default_model if any(c.value == default_model for c in model_choices) else model_choices[0].value
+    ).execute()
+
+    # Whisper model
+    whisper_model = inquirer.select(
+        message="Select Whisper model:",
+        choices=[
+            Choice("mlx-community/whisper-large-v3-mlx", name="🎯 Large-v3 (best accuracy)"),
+            Choice("mlx-community/whisper-medium-mlx", name="⚡ Medium (balanced)"),
+            Choice("mlx-community/whisper-small-mlx", name="🚀 Small (fast)"),
+        ],
+        default="mlx-community/whisper-large-v3-mlx"
+    ).execute()
+
+    stt_backend = inquirer.select(
+        message="Select STT backend:",
+        choices=[
+            Choice("whisper", name="🎧 MLX Whisper (no diarization)"),
+            Choice("whisperx", name="🌀 WhisperX + diarization"),
+        ],
+        default="whisper",
+    ).execute()
+
+    diarize = False
+    min_speakers = None
+    max_speakers = None
+    hf_token = ""
+    speaker_voice_pool_input = ""
+
+    if stt_backend == "whisperx":
+        diarize = inquirer.confirm(
+            message="Enable speaker diarization?",
+            default=True,
+        ).execute()
+        if diarize:
+            min_speakers = prompt_optional_int(
+                "Minimum speakers (leave blank for auto):"
+            )
+            max_speakers = prompt_optional_int(
+                "Maximum speakers (leave blank for auto):"
+            )
+            hf_token = inquirer.text(
+                message="Hugging Face token for diarization (leave blank if already set in env):",
+                default="",
+            ).execute().strip()
+
+    # TTS Engine
+    tts_engine = inquirer.select(
+        message="Select TTS engine:",
+        choices=[
+            Choice("kokoro", name="🎭 Kokoro TTS (with viseme output for avatars)"),
+            Choice("marvis", name="🎤 Marvis TTS (audio only)"),
+        ],
+        default="kokoro"
+    ).execute()
+
+    # Voice selection (Kokoro only)
+    tts_voice = "af_bella"
+    if tts_engine == "kokoro":
+        tts_voice = inquirer.select(
+            message="Select voice:",
+            choices=[
+                Choice("af_bella", name="👩 Bella (American female)"),
+                Choice("af_sarah", name="👩 Sarah (American female)"),
+                Choice("am_adam", name="👨 Adam (American male)"),
+                Choice("am_fenrir", name="👨 Fenrir (American male)"),
+                Choice("bf_emma", name="👩 Emma (British female)"),
+                Choice("bm_george", name="👨 George (British male)"),
+                Choice("em_alex", name="👨 Alex (Spanish male)"),
+            ],
+            default="af_bella"
+        ).execute()
+
+    if stt_backend == "whisperx" and diarize and tts_engine == "kokoro":
+        speaker_voice_pool_input = inquirer.text(
+            message="Additional Kokoro voices for new speakers (comma-separated, blank to reuse base voice):",
+            default="",
+        ).execute().strip()
+
+    # Generation settings
+    max_tokens = int(inquirer.number(
+        message="Max tokens per response:",
+        min_allowed=128,
+        max_allowed=512,
+        default=256
+    ).execute())
+
+    stream = inquirer.confirm(
+        message="Stream text responses?",
+        default=True
+    ).execute()
+
+    # Build command
+    cmd_parts = [
+        "uv run sts-avatar-cli",
+        f"--chat-model {model_id}",
+        f"--whisper-model {whisper_model}",
+        f"--stt-backend {stt_backend}",
+        f"--tts-engine {tts_engine}",
+        f"--max-tokens {max_tokens}"
+    ]
+
+    if tts_engine == "kokoro":
+        cmd_parts.append(f"--tts-voice {tts_voice}")
+
+    if stream:
+        cmd_parts.append("--stream")
+
+    if stt_backend == "whisperx":
+        if diarize:
+            cmd_parts.append("--diarize")
+            if min_speakers is not None:
+                cmd_parts.append(f"--min-speakers {min_speakers}")
+            if max_speakers is not None:
+                cmd_parts.append(f"--max-speakers {max_speakers}")
+            if speaker_voice_pool_input:
+                cmd_parts.append(
+                    f"--speaker-voice-pool {shlex.quote(speaker_voice_pool_input)}"
+                )
+        if hf_token:
+            cmd_parts.append(f"--hf-token {shlex.quote(hf_token)}")
+
+    cmd = " ".join(cmd_parts)
+
+    console.print(f"\n[green]Starting STS Avatar Pipeline[/green]")
+    console.print(f"[dim]Command: {cmd}[/dim]\n")
+    console.print("[bold]Usage:[/bold]")
+    console.print("  - Provide audio file paths when prompted")
+    console.print("  - Each response saved in var/sts_avatar/response_TIMESTAMP/")
+    console.print("  - Contains: audio.wav, visemes.json, response.txt, transcription.txt")
+    console.print("  - With diarization: + transcription_speakers.txt + speakers.json\n")
+
+    return cmd
+
+
+def configure_generators():
+    """Generators hub (e.g., MLX Q&A dataset)."""
+    while True:
+        action = inquirer.select(
+            message="Generators menu:",
+            choices=[
+                Choice("qa_dataset", name="🧪 Q&A Dataset (MLX models)"),
+                Choice("coming_soon", name="🤖 Auto generator planner (coming soon)"),
+                Choice("back", name="⬅️  Back to main menu"),
+            ],
+        ).execute()
+
+        if action == "back":
+            break
+        elif action == "qa_dataset":
+            run_qa_dataset_generator()
+        else:
+            console.print("\n[yellow]Hang tight, this one is on the roadmap.[/yellow]\n")
+
+
+def run_qa_dataset_generator():
+    """Interactive wrapper for experiments/dataset_generation."""
+    default_cfg = QAGenerationConfig()
+
+    source_dir_input = inquirer.text(
+        message="Directory with PDFs:",
+        default=str(default_cfg.source_docs_dir),
+    ).execute().strip()
+    source_dir = Path(source_dir_input or default_cfg.source_docs_dir)
+
+    if not source_dir.exists():
+        console.print(f"[red]Directory not found:[/red] {source_dir}")
+        return
+
+    pdf_files = sorted(source_dir.glob("*.pdf"))
+    if not pdf_files:
+        console.print(f"[red]No PDF files in {source_dir}. Add documents first.[/red]")
+        return
+
+    pdf_choices = [Choice("ALL", name="📂 All PDFs in directory")]
+    pdf_choices += [Choice(str(p), name=p.name) for p in pdf_files]
+
+    selected = inquirer.checkbox(
+        message="Select PDFs to include (Space to toggle, Enter to confirm):",
+        choices=pdf_choices,
+        default=["ALL"],
+    ).execute()
+
+    if not selected or "ALL" in selected:
+        selected_paths = pdf_files
+    else:
+        selected_paths = [Path(path) for path in selected]
+
+    output_path_input = inquirer.text(
+        message="Output dataset path:",
+        default=str(default_cfg.output_dataset_path),
+    ).execute().strip()
+    output_path = Path(output_path_input or default_cfg.output_dataset_path)
+
+    max_qa = int(
+        inquirer.number(
+            message="Max Q&A pairs per document:",
+            default=default_cfg.max_qa_per_doc,
+            min_allowed=1,
+            max_allowed=200,
+        ).execute()
+    )
+
+    min_chars = int(
+        inquirer.number(
+            message="Min characters per chunk:",
+            default=default_cfg.min_chars_per_chunk,
+            min_allowed=20,
+            max_allowed=5000,
+        ).execute()
+    )
+
+    question_model = (
+        inquirer.text(
+            message="Question model (MLX ID):",
+            default=default_cfg.question_model,
+        )
+        .execute()
+        .strip()
+        or default_cfg.question_model
+    )
+
+    answer_model = (
+        inquirer.text(
+            message="Answer model (MLX ID):",
+            default=default_cfg.answer_model,
+        )
+        .execute()
+        .strip()
+        or default_cfg.answer_model
+    )
+
+    cfg = QAGenerationConfig(
+        source_docs_dir=source_dir,
+        output_dataset_path=output_path,
+        question_model=question_model,
+        answer_model=answer_model,
+        question_max_tokens=default_cfg.question_max_tokens,
+        answer_max_tokens=default_cfg.answer_max_tokens,
+        max_qa_per_doc=max_qa,
+        min_chars_per_chunk=min_chars,
+    )
+
+    console.print(
+        f"\n[cyan]Generating dataset from {len(selected_paths)} PDF(s)...[/cyan]"
+    )
+
+    try:
+        generate_qa_dataset(config=cfg, pdf_paths=selected_paths)
+        console.print(
+            f"[green]Done! Dataset saved to {cfg.output_dataset_path}[/green]\n"
+        )
+    except Exception as exc:
+        console.print(f"[red]Generator failed: {exc}[/red]\n")
 
 
 def run_pipeline(pipeline_id: str):
@@ -938,6 +1671,14 @@ def run_pipeline(pipeline_id: str):
         cmd = configure_rag()
     elif pipeline_id == "ingest":
         cmd = configure_ingest()
+    elif pipeline_id == "classify":
+        cmd = configure_classify()
+    elif pipeline_id == "chat":
+        cmd = configure_chat()
+    elif pipeline_id == "voice_chat":
+        cmd = configure_voice_chat()
+    elif pipeline_id == "sts_avatar":
+        cmd = configure_sts_avatar()
     elif pipeline_id == "bench":
         console.print("[yellow]Benchmark CLI doesn't have interactive config yet[/yellow]")
         cmd = "uv run bench-cli --help"
@@ -973,12 +1714,18 @@ def main_menu():
             message="What would you like to do?",
             choices=[
                 Separator("═══ PIPELINES ═══"),
+                Choice("chat", name="💬 Chat - Conversational AI"),
+                Choice("voice_chat", name="🗣️  Voice Chat - Text to Speech"),
+                Choice("sts_avatar", name="🎭 STS Avatar - Speech to Speech"),
                 Choice("rag", name="🔍 RAG - Question Answering"),
                 Choice("ingest", name="📚 Ingest - Build Vector Index"),
+                Choice("classify", name="🏷️  Classify - Text Classification"),
                 Choice("flux", name="🎨 Flux - Image Generation"),
                 Choice("musicgen", name="🎵 MusicGen - Audio Generation"),
                 Choice("whisper", name="🎙️  Whisper - Speech-to-Text"),
                 Choice("bench", name="📊 Benchmark - Performance Testing"),
+                Separator("═══ GENERATORS ═══"),
+                Choice("generators", name="🧪 Generators - Dataset Tools"),
                 Separator("═══ MODEL MANAGEMENT ═══"),
                 Choice("download", name="📥 Download Models"),
                 Choice("models", name="📦 View Available Models"),
@@ -1012,6 +1759,10 @@ def main_menu():
             console.clear()
             show_header()
             download_model()
+        elif action == "generators":
+            console.clear()
+            show_header()
+            configure_generators()
         elif action == "system":
             console.clear()
             show_header()

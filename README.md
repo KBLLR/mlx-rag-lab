@@ -1,98 +1,70 @@
-# mlx-RAG
+# mlx‑RAG · Apple Silicon Tool Suite
 
-This repository is a monorepo for experiments and applications built on top of MLX-based retrieval-augmented generation (RAG) on Apple silicon. It is a lab: MLX-powered RAG, Flux, MusicGen, and benchmarking experiments gathered in one repo, not a polished product.
+mlx‑RAG is a lab of **MLX-first workflows** for Apple silicon. It bundles Speech‑to‑Speech avatars, live voice chat, RAG, Flux text‑to‑image, benchmarking, and ingestion utilities into one CLI-driven toolkit. Every pipeline runs locally on Metal (no cloud dependency) while staying close to upstream projects like **mlx-lm**, **Hugging Face Transformers**, Kokoro TTS, and WhisperX.
 
-## Project Overview
+---
 
-The core Python RAG pipeline lives under `src/` and is responsible for:
-- Ingesting documents into vector databases
-- Running retrieval and query workflows
-- Integrating with local MLX models for inference
+## What’s inside
 
-Additional directories such as `apps/`, `Libraries/`, and `Tools/` contain example apps, Swift libraries, and utilities that build on the MLX ecosystem.
+| Domain | Pipelines & Models | Highlights |
+| --- | --- | --- |
+| **Voice / STS** | `sts-avatar-cli` (WhisperX → GPT‑OSS 20B → Kokoro TTS + visemes) | Ready Player Me visemes, diarization folders, push-to-talk mic capture (via Voice Chat app) |
+| **Live Voice Chat** | `voice-chat-cli` (Whisper, GPT‑OSS, Marvis/Kokoro) | Hold‑space recording with VU meter, instant playback, optional transcript saving |
+| **Retrieval & RAG** | `rag-cli`, ingestion scripts | Vector DB creation, Qwen reranker integration, scripted workflows for terminal automation |
+| **Imaging** | `flux-cli`, `bench-cli flux …` | Flux text‑to‑image presets, benchmark harness with repeatable prompts |
+| **Music / Audio** | MusicGen helpers under `apps/musicgen_cli.py` | Local melody experiments (see docs/projects/) |
+| **Lab Orchestration** | `mlxlab_cli.py` | Rich menu for launching every pipeline with curated defaults |
 
-## Features
+_Model roster_: GPT-OSS 20B (mlx-community), Phi‑3 Mini, Kokoro voices (54), Marvis TTS, Whisper & WhisperX MLX forks, Qwen reranker, Flux checkpoints, MusicGen + Encodec. Download recipes live in `mlx-models/README.md`.
 
-*   **MLX-powered RAG:** Leverage Apple silicon for efficient local RAG operations.
-*   **Modular Design:** Easily extendable architecture for various RAG components.
-*   **Multimodal Capabilities:** (Future) Integration with models like Musicgen for audio generation, FLUX for images, and Llasa for voice.
-*   **CLI Interface:** Interactive command-line tools for ingestion, querying, and model interaction.
+---
 
-## Setup and Installation
-
-To get started with `mlx-RAG`, follow these steps:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/mlx-RAG.git
-    cd mlx-RAG
-    ```
-
-2.  **Install `uv`:**
-    This project uses `uv` for dependency management. If you don't have `uv` installed, you can get it via `pip`:
-    ```bash
-    pip install uv
-    ```
-
-3.  **Create and activate virtual environment:**
-    ```bash
-    uv venv
-    source .venv/bin/activate
-    ```
-
-4.  **Install dependencies:**
-    ```bash
-    uv sync
-    ```
-
-5.  **Download MLX Models:**
-    Some components require pre-trained MLX models. Refer to `mlx-models/README.md` for instructions on how to download them.
-
-## Usage
-
-The lab exposes three main CLIs plus helper workflows:
-
-- `rag-cli` – RAG over a local vector index; it reranks documents before calling `MLXModelEngine`. The CLI may trigger MLX/Metal `NSRangeException` when you hit real models.
-- `flux-cli` – Flux text-to-image demo that wraps `rag.cli.flux_txt2image`.
-- `bench-cli` – Dispatches the Flux benchmark runner or prompt evaluation workflow with familiar presets.
-
-Every command is registered via `[project.scripts]` so you can run `uv run rag-cli ...` (or install the package to expose the entry points). The previous Textual-based TUI lives in `archive/tui/` and is not maintained; the CLI path is the canonical way forward.
-
-For ingestion, benchmarking, or MusicGen experiments you still use the scripts under `src/rag/cli/`, `benchmarks/`, and `musicgen/` as documented in `docs/COMMANDS_MANIFEST.md`.
-
-## Command-line entry points
-
-After you run `uv sync` the project installs console scripts into `.venv/bin`:
-
-- `rag-cli` – reranks retrieved chunks via `QwenReranker` and asks `MLXModelEngine` for the answer.
-- `flux-cli` – thin wrapper around `rag.cli.flux_txt2image`/MLX Flux pipeline.
-- `bench-cli` – dispatches the Flux benchmark runner or prompt evaluation workflow.
-
-Example usage:
+## Quick start
 
 ```bash
-uv sync
+git clone https://github.com/your-username/mlx-RAG.git
+cd mlx-RAG
+pip install uv                      # once
+uv venv && source .venv/bin/activate
+uv sync                             # installs deps + console scripts
 
-# pure help (does not instantiate MLX)
-uv run rag-cli --help
-
-# Flux smoke test (touches MLX/Metal)
-uv run flux-cli --prompt "lab smoke test" --steps 1 --image-size 256
-
-# Benchmark CLI help and dispatcher
-uv run bench-cli flux --help
+# Launch the lab menu (voice chat, STS avatar, RAG, Flux…)
+uv run mlxlab
 ```
 
-The scripts are wired through `[project.scripts]` and the shim in `src/rag/cli/entrypoints.py`, so `uv run rag-cli` works even though the modules live under `apps/`.
+CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` “just works”. See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
 
-## Contributing
+---
 
-We welcome contributions to `mlx-RAG`! Please see our [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines on how to get started.
+## Terminal-first workflows
 
-## License
+- **Voice Chat** – Hold SPACE to record, release to send. Whisper transcribes, GPT‑OSS answers, Kokoro/Marvis speaks, audio auto-plays and is saved under `var/voice_chat/response_*`.
+- **Speech-to-Speech Avatar** – Point to input audio (`var/source_audios`), get diarized transcripts, responses, `visemes.json`, and `speakers.json` for each turn. Designed for Ready Player Me / Three.js / Unity avatars.
+- **RAG CLI** – `uv run rag-cli --vdb-path var/indexes/foo.npz` queries your vector DB, reranks with Qwen, formats answers with source snippets.
+- **Flux / Bench** – `uv run flux-cli --prompt "retro mac" --steps 4` for quick renders, or `uv run bench-cli flux --preset portrait` to capture timing and outputs.
+- **Automation ready** – Every pipeline prints clear paths (audio, JSON, transcripts) so you can wire them into shell scripts, Hazel automations, or Shortcuts.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Upcoming niceties: richer per-app layouts (Rich panels), saved presets, batch workflows for ingestion/cleanup, and Apple Shortcuts shims for “hands-free” launching.
 
-## Documentation
+---
 
-For comprehensive documentation, including architecture, development guidelines, and project sitemap, please visit the [`docs/` directory](docs/README.md).
+## Roadmap snapshot
+
+- **Benchmarking**: keep extending `bench-cli` for reproducible Flux/MusicGen timings on M1–M4. Results feed into docs/benchmarks/.
+- **Workflow automation**: per-app config files + templated runs (e.g., “daily RAG ingest”, “voice memo → STS folder”).
+- **Rich UI**: structured console layouts (progress bars, speaker panels, VU meters) across all CLIs, not just voice chat.
+- **Data plumbing**: scripted cleanup for model caches, ingestion manifests, HF offline mirrors.
+
+Follow progress in `agents/HANDOFFS.md` where each agent logs their alias + next steps.
+
+---
+
+## Credits & acknowledgements
+
+- **Apple MLX / mlx-lm** for the core model runtimes and reference Whisper code (see `examples/whisper` subtree).
+- **Hugging Face** for hosting GPT-OSS, Kokoro, Flux, WhisperX, and reranker checkpoints that power this lab.
+- **Community projects** like Kokoro TTS, Marvis TTS, WhisperX-MLX, MusicGen, and Qwen reranker that we integrate via upstream APIs.
+
+mlx‑RAG is not a polished product—it’s a fast-moving experimentation lab meant to squeeze every drop of performance from Apple silicon. Contributions, docs, and ideas are welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+
+Enjoy the lab, keep your models local, and let the terminal be your control room. 🎛️

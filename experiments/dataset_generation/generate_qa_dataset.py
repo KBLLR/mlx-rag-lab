@@ -1,10 +1,11 @@
 import json
 import os
-import time
+from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
-import ollama
+import mlx.data as mxdata
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -15,18 +16,23 @@ from rich.progress import (
 )
 from unstructured.partition.pdf import partition_pdf
 
-console = Console()
+from libs.mlx_core.model_engine import MLXModelEngine
+from rag.chat.templates import strip_channel_controls
 
-# -----------------------------
-# Config
-# -----------------------------
+console = Console()
 
 SOURCE_DOCS_DIR = Path("var/source_docs")  # directory with PDFs
 OUTPUT_DATASET_PATH = Path("var/benchmarking/generated_qa_dataset.json")
 
-# Two-model setup: one for questions, one for answers
-QUESTION_MODEL = os.getenv("OLLAMA_QUESTION_MODEL", "qwen3:8b")
-ANSWER_MODEL = os.getenv("OLLAMA_ANSWER_MODEL", "deepseek-r1:8b")
+# Two-model setup: one for questions, one for answers (both MLX/Metal)
+QUESTION_MODEL = os.getenv(
+    "MLX_QUESTION_MODEL", "mlx-community/mistral-7b-instruct-v0.2-4bit"
+)
+ANSWER_MODEL = os.getenv(
+    "MLX_ANSWER_MODEL", "mlx-community/mistral-7b-instruct-v0.2-4bit"
+)
+QUESTION_MAX_TOKENS = int(os.getenv("QUESTION_MAX_TOKENS", "160"))
+ANSWER_MAX_TOKENS = int(os.getenv("ANSWER_MAX_TOKENS", "256"))
 
 # How many Q&A per PDF
 MAX_QA_PER_DOC = int(os.getenv("MAX_QA_PER_DOC", "20"))
@@ -37,144 +43,55 @@ MIN_CHARS_PER_CHUNK = int(os.getenv("MIN_CHARS_PER_CHUNK", "80"))
 DEBUG = os.getenv("QA_DEBUG", "1") == "1"
 
 
+@dataclass
+class QAGenerationConfig:
+    source_docs_dir: Path = SOURCE_DOCS_DIR
+    output_dataset_path: Path = OUTPUT_DATASET_PATH
+    question_model: str = QUESTION_MODEL
+    answer_model: str = ANSWER_MODEL
+    question_max_tokens: int = QUESTION_MAX_TOKENS
+    answer_max_tokens: int = ANSWER_MAX_TOKENS
+    max_qa_per_doc: int = MAX_QA_PER_DOC
+    min_chars_per_chunk: int = MIN_CHARS_PER_CHUNK
+
+
 def dprint(msg: str) -> None:
     if DEBUG:
         console.print(f"[dim]{msg}[/dim]")
 
 
 # -----------------------------
-# Ollama helpers
+# MLX helpers
 # -----------------------------
 
 
-def _extract_response_text(resp: Any) -> Optional[str]:
-    """
-    Normalize different Ollama Python client return types:
-    - dict with 'response'
-    - GenerateResponse (mapping + attributes)
-    - Chat-like objects with message.content / message.thinking
-    - Thinking models exposing .thinking on the root object
-    """
+class LocalTextGenerator:
+    """Tiny wrapper around MLXModelEngine for prompt->text generation."""
 
-    # 1) dict-style direct
-    if isinstance(resp, dict):
-        raw = resp.get("response", None)
-        if raw:
-            text = str(raw).strip()
-            if text:
-                return text
+    def __init__(self, model_id: str):
+        self.model_id = model_id
+        console.print(f"[cyan]Loading MLX model:[/cyan] [bold]{model_id}[/bold]")
+        self.engine = MLXModelEngine(model_id, model_type="text")
 
-    # 2) mapping-style: resp['response'] (GenerateResponse supports __getitem__)
-    try:
-        if not isinstance(resp, dict):
-            raw = resp["response"]  # type: ignore[index]
-            if raw:
-                text = str(raw).strip()
-                if text:
-                    return text
-    except Exception:
-        pass
-
-    # 3) attribute-style: resp.response
-    raw_attr = getattr(resp, "response", None)
-    if raw_attr:
-        text = str(raw_attr).strip()
-        if text:
-            return text
-
-    # 4) generate() thinking-capable models: resp.thinking
-    thinking_attr = getattr(resp, "thinking", None)
-    if thinking_attr:
-        text = str(thinking_attr).strip()
-        if text:
-            return text
-
-    # 5) chat-like objects: resp.message.content / resp.message.thinking
-    msg = getattr(resp, "message", None)
-    if msg is not None:
-        # content
-        content = getattr(msg, "content", None)
-        if not content and isinstance(msg, dict):
-            content = msg.get("content", None)
-        if content:
-            text = str(content).strip()
-            if text:
-                return text
-
-        # thinking (last resort)
-        msg_thinking = getattr(msg, "thinking", None)
-        if not msg_thinking and isinstance(msg, dict):
-            msg_thinking = msg.get("thinking", None)
-        if msg_thinking:
-            text = str(msg_thinking).strip()
-            if text:
-                return text
-
-    # 6) nothing worked
-    dprint(
-        f"DEBUG: Could not extract 'response' from object of type {type(resp)} "
-        f"repr(resp)[:300]={repr(resp)[:300]}"
-    )
-    return None
-
-
-def call_ollama_safely(
-    *,
-    model: str,
-    prompt: str,
-    temperature: float,
-    num_predict: int,
-    max_attempts: int = 3,
-    backoff_sec: float = 1.0,
-) -> Optional[str]:
-    """
-    Wraps ollama.generate with retries and error handling.
-    Important: we explicitly set think=False to avoid dumping everything into `thinking`.
-    """
-    last_error: Optional[Exception] = None
-
-    for attempt in range(1, max_attempts + 1):
+    def generate(self, prompt: str, max_tokens: int) -> Optional[str]:
         try:
-            dprint(
-                f"DEBUG: Calling ollama model={model}, "
-                f"attempt {attempt}/{max_attempts}, num_predict={num_predict}"
+            output = self.engine.generate(prompt, max_tokens=max_tokens)
+        except Exception as exc:
+            console.print(f"[red]Generation failed on {self.model_id}: {exc}[/red]")
+            return None
+
+        if isinstance(output, (dict, list)):
+            text = json.dumps(output, ensure_ascii=False)
+        else:
+            text = str(output)
+
+        text = strip_channel_controls(text).strip()
+        if not text:
+            console.print(
+                f"[yellow]Model {self.model_id} returned empty text. Skipping chunk.[/yellow]"
             )
-            resp = ollama.generate(
-                model=model,
-                prompt=prompt,
-                stream=False,
-                # options = model-level knobs
-                options={
-                    "temperature": temperature,
-                    "num_predict": num_predict,
-                },
-                # top-level think flag (reasoning models: Qwen3, DeepSeek, GPT-OSS, etc.)
-                think=False,
-            )
-
-            text = _extract_response_text(resp)
-            dprint(f"DEBUG: Raw LLM response (first 200): {repr(text)[:200]}")
-
-            if text:
-                return text
-
-            last_error = RuntimeError("Empty or missing 'response' from ollama")
-
-        except Exception as e:
-            last_error = e
-            dprint(
-                f"DEBUG: ollama.generate failed on attempt "
-                f"{attempt}/{max_attempts}: {e}"
-            )
-
-        if attempt < max_attempts:
-            time.sleep(backoff_sec * attempt)
-
-    console.print(
-        f"[yellow]Giving up on this chunk after {max_attempts} attempts. "
-        f"Last error: {last_error}[/yellow]"
-    )
-    return None
+            return None
+        return text
 
 
 # -----------------------------
@@ -196,7 +113,7 @@ def list_pdf_files(source_dir: Path) -> List[Path]:
     return pdf_files
 
 
-def extract_chunks_for_pdf(pdf_path: Path) -> List[str]:
+def extract_chunks_for_pdf(pdf_path: Path, config: QAGenerationConfig) -> List[str]:
     pdf_path = pdf_path.expanduser().resolve()
     console.print(f"[INFO] Processing {pdf_path} for chunking...")
 
@@ -214,7 +131,7 @@ def extract_chunks_for_pdf(pdf_path: Path) -> List[str]:
         text = text.strip()
         if not text:
             continue
-        if len(text) < MIN_CHARS_PER_CHUNK:
+        if len(text) < config.min_chars_per_chunk:
             dprint(
                 f"DEBUG: Skipping very short chunk from {pdf_path.name} "
                 f"({len(text)} chars): {repr(text[:80])}"
@@ -228,12 +145,31 @@ def extract_chunks_for_pdf(pdf_path: Path) -> List[str]:
     return chunks
 
 
+def chunk_iterator(
+    pdf_files: List[Path],
+    config: QAGenerationConfig,
+) -> Iterable[Dict[str, object]]:
+    """Yield dict records compatible with mlx.data streams."""
+    for pdf in pdf_files:
+        chunks = extract_chunks_for_pdf(pdf, config)
+        for idx, chunk_text in enumerate(chunks, start=1):
+            yield {
+                "pdf_path": str(pdf).encode("utf-8"),
+                "chunk_index": idx,
+                "chunk_text": chunk_text.encode("utf-8"),
+            }
+
+
 # -----------------------------
 # Q & A generation
 # -----------------------------
 
 
-def generate_question(chunk_text: str) -> Optional[str]:
+def generate_question(
+    chunk_text: str,
+    generator: LocalTextGenerator,
+    max_tokens: int,
+) -> Optional[str]:
     question_prompt = (
         "You are an expert question generator. "
         "Create a single, clear, and concise question that can be directly answered "
@@ -244,15 +180,15 @@ def generate_question(chunk_text: str) -> Optional[str]:
         "Question:"
     )
 
-    return call_ollama_safely(
-        model=QUESTION_MODEL,
-        prompt=question_prompt,
-        temperature=0.0,
-        num_predict=128,
-    )
+    return generator.generate(question_prompt, max_tokens=max_tokens)
 
 
-def generate_answer(chunk_text: str, question: str) -> Optional[str]:
+def generate_answer(
+    chunk_text: str,
+    question: str,
+    generator: LocalTextGenerator,
+    max_tokens: int,
+) -> Optional[str]:
     answer_prompt = (
         "You are an expert answer generator. "
         "Provide a concise and direct answer to the following question, "
@@ -264,12 +200,13 @@ def generate_answer(chunk_text: str, question: str) -> Optional[str]:
         "Answer:"
     )
 
-    return call_ollama_safely(
-        model=ANSWER_MODEL,
-        prompt=answer_prompt,
-        temperature=0.0,
-        num_predict=256,
-    )
+    return generator.generate(answer_prompt, max_tokens=max_tokens)
+
+
+def _decode_bytes_field(field) -> str:
+    if hasattr(field, "tobytes"):
+        return field.tobytes().decode("utf-8")
+    return str(field)
 
 
 # -----------------------------
@@ -277,26 +214,40 @@ def generate_answer(chunk_text: str, question: str) -> Optional[str]:
 # -----------------------------
 
 
-def generate_qa_dataset() -> None:
+def generate_qa_dataset(
+    config: Optional[QAGenerationConfig] = None,
+    pdf_paths: Optional[List[Path]] = None,
+) -> None:
+    cfg = config or QAGenerationConfig()
+    console.print("[bold cyan]Starting MLX Q&A Dataset Generation...[/bold cyan]")
     console.print(
-        "[bold cyan]Starting Q&A Dataset Generation with two models...[/bold cyan]"
+        f"[cyan]Question model:[/cyan] [bold]{cfg.question_model}[/bold] "
+        f"(max tokens {cfg.question_max_tokens})"
     )
     console.print(
-        f"[cyan]Question model:[/cyan] [bold]{QUESTION_MODEL}[/bold] | "
-        f"[cyan]Answer model:[/cyan] [bold]{ANSWER_MODEL}[/bold]"
+        f"[cyan]Answer model:[/cyan] [bold]{cfg.answer_model}[/bold] "
+        f"(max tokens {cfg.answer_max_tokens})"
     )
     console.print(
-        f"[cyan]Max Q&A pairs per document:[/cyan] [bold]{MAX_QA_PER_DOC}[/bold]"
+        f"[cyan]Max Q&A pairs per document:[/cyan] [bold]{cfg.max_qa_per_doc}[/bold]"
     )
     console.print(
-        f"[cyan]Min chars per chunk:[/cyan] [bold]{MIN_CHARS_PER_CHUNK}[/bold]"
+        f"[cyan]Min chars per chunk:[/cyan] [bold]{cfg.min_chars_per_chunk}[/bold]"
     )
 
-    pdf_files = list_pdf_files(SOURCE_DOCS_DIR)
+    pdf_files = pdf_paths or list_pdf_files(cfg.source_docs_dir)
     if not pdf_files:
         return
 
+    question_generator = LocalTextGenerator(cfg.question_model)
+    if cfg.question_model == cfg.answer_model:
+        answer_generator = question_generator
+    else:
+        answer_generator = LocalTextGenerator(cfg.answer_model)
+
     qa_dataset: List[Dict[str, Any]] = []
+    pairs_per_doc: Dict[str, int] = defaultdict(int)
+    completed_docs: set[str] = set()
 
     progress_columns = [
         SpinnerColumn(),
@@ -305,82 +256,99 @@ def generate_qa_dataset() -> None:
         TimeElapsedColumn(),
     ]
 
+    chunk_stream = mxdata.stream_python_iterable(
+        lambda: chunk_iterator(pdf_files, cfg)
+    )
+
     with Progress(*progress_columns, console=console) as progress:
         task = progress.add_task("Generating Q&A pairs...", total=None)
 
-        for pdf_path in pdf_files:
-            chunks = extract_chunks_for_pdf(pdf_path)
-            if not chunks:
+        for record in chunk_stream:
+            pdf_path = Path(_decode_bytes_field(record["pdf_path"]))
+            doc_key = str(pdf_path)
+            chunk_idx = int(record["chunk_index"])
+            chunk_text = _decode_bytes_field(record["chunk_text"])
+
+            if doc_key in completed_docs:
+                if len(completed_docs) == len(pdf_files):
+                    break
                 continue
 
-            pairs_for_doc = 0
-
-            for idx, chunk_text in enumerate(chunks, start=1):
-                if pairs_for_doc >= MAX_QA_PER_DOC:
-                    console.print(
-                        f"[magenta]Reached MAX_QA_PER_DOC={MAX_QA_PER_DOC} "
-                        f"for {pdf_path.name}. Moving to next document.[/magenta]"
-                    )
+            if pairs_per_doc[doc_key] >= MAX_QA_PER_DOC:
+                completed_docs.add(doc_key)
+                if len(completed_docs) == len(pdf_files):
                     break
+                continue
 
-                dprint(
-                    f"DEBUG: Processing chunk {idx} from {pdf_path.name}\n"
-                    f"DEBUG: Chunk text (first 200 chars): "
-                    f"{chunk_text[:200].replace(os.linesep, ' ')}"
-                )
+            dprint(
+                f"DEBUG: Processing chunk {chunk_idx} from {pdf_path.name}\n"
+                f"DEBUG: Chunk text (first 200 chars): "
+                f"{chunk_text[:200].replace(os.linesep, ' ')}"
+            )
 
-                # --- Question ---
-                question = generate_question(chunk_text)
-                if not question:
-                    console.print(
-                        f"[yellow]Skipping chunk {idx} in {pdf_path.name}: "
-                        f"No question generated.[/yellow]"
-                    )
-                    progress.update(task, advance=1)
-                    continue
-
-                # --- Answer ---
-                answer = generate_answer(chunk_text, question)
-                if not answer:
-                    console.print(
-                        f"[yellow]Skipping chunk {idx} in {pdf_path.name}: "
-                        f"No answer generated.[/yellow]"
-                    )
-                    progress.update(task, advance=1)
-                    continue
-
-                if answer.strip().lower() == "not enough information":
-                    console.print(
-                        f"[yellow]Skipping chunk {idx} in {pdf_path.name}: "
-                        f"Question not answerable by context.[/yellow]"
-                    )
-                    progress.update(task, advance=1)
-                    continue
-
-                qa_dataset.append(
-                    {
-                        "query": question,
-                        "ground_truth_answer": answer,
-                        "relevant_document_text": chunk_text,
-                        "relevant_document_source": str(pdf_path),
-                    }
-                )
-
-                pairs_for_doc += 1
+            question = generate_question(
+                chunk_text,
+                question_generator,
+                cfg.question_max_tokens,
+            )
+            if not question:
                 console.print(
-                    f"[green]Generated Q&A {pairs_for_doc}/{MAX_QA_PER_DOC} "
-                    f"for {pdf_path.name} (chunk {idx}).[/green]"
+                    f"[yellow]Skipping chunk {chunk_idx} in {pdf_path.name}: "
+                    f"No question generated.[/yellow]"
                 )
                 progress.update(task, advance=1)
+                continue
+
+            answer = generate_answer(
+                chunk_text,
+                question,
+                answer_generator,
+                cfg.answer_max_tokens,
+            )
+            if not answer:
+                console.print(
+                    f"[yellow]Skipping chunk {chunk_idx} in {pdf_path.name}: "
+                    f"No answer generated.[/yellow]"
+                )
+                progress.update(task, advance=1)
+                continue
+
+            normalized_answer = answer.strip().lower()
+            if normalized_answer == "not enough information":
+                console.print(
+                    f"[yellow]Skipping chunk {chunk_idx} in {pdf_path.name}: "
+                    f"Question not answerable by context.[/yellow]"
+                )
+                progress.update(task, advance=1)
+                continue
+
+            qa_dataset.append(
+                {
+                    "query": question,
+                    "ground_truth_answer": answer,
+                    "relevant_document_text": chunk_text,
+                    "relevant_document_source": str(pdf_path),
+                }
+            )
+
+            pairs_per_doc[doc_key] += 1
+            if pairs_per_doc[doc_key] >= cfg.max_qa_per_doc:
+                completed_docs.add(doc_key)
+
+            console.print(
+                f"[green]Generated Q&A {pairs_per_doc[doc_key]}/{cfg.max_qa_per_doc} "
+                f"for {pdf_path.name} (chunk {chunk_idx}).[/green]"
+            )
+            progress.update(task, advance=1)
 
     # Save final dataset
-    OUTPUT_DATASET_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_DATASET_PATH.open("w", encoding="utf-8") as f:
+    cfg.output_dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    with cfg.output_dataset_path.open("w", encoding="utf-8") as f:
         json.dump(qa_dataset, f, indent=2, ensure_ascii=False)
 
     console.print(
         f"[bold green]Dataset generation complete! "
-        f"Saved {len(qa_dataset)} Q&A pairs to {OUTPUT_DATASET_PATH}[/bold green]"
+        f"Saved {len(qa_dataset)} Q&A pairs to {cfg.output_dataset_path}[/bold green]"
     )
 
 
