@@ -17,14 +17,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.chat.templates import strip_channel_controls
+from apps.ui import get_console, render_header, render_footer, render_chat_message
 
-console = Console()
+console = get_console()
 
 DEFAULT_MODEL_ID = "mlx-models/gpt-oss-20b-mxfp4"
 FALLBACK_MODEL_ID = "mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx"
@@ -277,20 +277,20 @@ def main() -> None:
     _model_engine = MLXModelEngine(model_id, model_type="text")
     model_engine = _model_engine
 
+    # Render header with metadata
     console.print()
-    console.print(
-        Panel.fit(
-            (
-                f"[bold cyan]MLX Chat CLI[/bold cyan]\n"
-                f"Model: {model_id}\n"
-                f"Mode: {args.mode}\n"
-                f"Max tokens: {args.max_tokens}\n"
-            ),
-            border_style="cyan",
-        )
-    )
-    console.print(f"\n[dim]System ({args.mode}): {system_prompt}[/dim]\n")
-    console.print("[dim]Type your message (Ctrl+C to hard-exit, or /exit to exit cleanly)[/dim]\n")
+    meta = {
+        "Model": Path(model_id).name if "/" in model_id else model_id,
+        "Mode": args.mode,
+        "Max Tokens": args.max_tokens,
+        "Temp": f"{args.temperature:.1f}" if args.temperature else "N/A",
+    }
+    render_header("MLX Chat CLI", meta)
+
+    console.print(f"\n[dim]System: {system_prompt}[/dim]\n")
+
+    # Render footer with commands
+    render_footer(["/help", "/history", "/clear", "/mode", "/exit"])
 
     history: List[Dict] = []
 
@@ -317,19 +317,14 @@ def main() -> None:
             if not history:
                 console.print("[dim]History is empty.[/dim]\n")
                 continue
-            rendered: list[str] = []
-            for msg in history:
-                if msg["role"] == "user":
-                    rendered.append(f"[green]User:[/green] {msg['content']}")
-                else:
-                    rendered.append(f"[cyan]Assistant:[/cyan] {msg['content']}")
             console.print(
                 Panel(
-                    "\n".join(rendered),
-                    title="Conversation History",
+                    f"[bold cyan]Conversation History[/bold cyan]\n[dim]{len(history)} messages[/dim]",
                     border_style="blue",
                 )
             )
+            for msg in history:
+                render_chat_message(msg["role"], msg["content"])
             continue
         elif lowered in ("/help", "/?"):
             print_help_panel()
@@ -345,8 +340,6 @@ def main() -> None:
             tokenizer=model_engine.tokenizer,
         )
 
-        console.print("\n[bold cyan]Assistant:[/bold cyan] ", end="")
-
         try:
             response_text = model_engine.generate(
                 prompt,
@@ -355,7 +348,9 @@ def main() -> None:
             if isinstance(response_text, (dict, list)):
                 response_text = json.dumps(response_text, indent=2, ensure_ascii=False)
             response_text = strip_channel_controls(response_text or "")
-            console.print(response_text)
+
+            # Use shared chat message renderer
+            render_chat_message("assistant", response_text)
 
             history.append({"role": "user", "content": user_input})
             history.append({"role": "assistant", "content": response_text})
@@ -364,8 +359,6 @@ def main() -> None:
             console.print(f"\n[red]Error: {e}[/red]")
             console.print("[yellow]Continuing...[/yellow]\n")
             continue
-
-        console.print()
 
     if history:
         if args.classify_on_exit:

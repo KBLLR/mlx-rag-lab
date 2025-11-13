@@ -6,10 +6,17 @@ import sys
 from pathlib import Path
 from textwrap import shorten
 
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.table import Table
+
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.chat.templates import strip_channel_controls
 from rag.models.qwen_reranker import QwenReranker
 from rag.retrieval.vdb import VectorDB
+from apps.ui import get_console, render_header, render_footer, render_chat_message, truncate_source_path
+
+console = get_console()
 
 DEFAULT_VDB_PATH = Path("var/indexes/vdb.npz")
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
@@ -88,7 +95,7 @@ def cleanup_handler(signum, frame):
     """Handle Ctrl+C gracefully by cleaning up MLX resources and multiprocessing."""
     global _model_engine, _reranker, _vdb
 
-    print("\n\n🧹 Cleaning up resources...")
+    console.print("\n\n[yellow]Cleaning up resources...[/yellow]")
 
     # Delete MLX models to free GPU/unified memory
     if _model_engine is not None:
@@ -106,7 +113,7 @@ def cleanup_handler(signum, frame):
     # Force garbage collection to release memory
     gc.collect()
 
-    print("✅ Cleanup complete. Bye.\n")
+    console.print("[success]Cleanup complete. Bye.[/success]\n")
     sys.exit(0)
 
 
@@ -117,20 +124,32 @@ def main() -> None:
     signal.signal(signal.SIGINT, cleanup_handler)
 
     args = build_parser().parse_args()
+
+    console.print("\n[bold cyan]Loading RAG system...[/bold cyan]")
     _vdb = VectorDB(str(args.vdb_path))
 
     # Make reranker optional to avoid timeouts/semaphore leaks
     if args.no_reranker:
         _reranker = None
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
-        print(f"Using model {args.model_id} (reranker disabled)")
     else:
         _reranker = QwenReranker(args.reranker_id)
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
-        print(f"Using model {args.model_id} and reranker {args.reranker_id}")
 
     _model_engine = MLXModelEngine(args.model_id, model_type="text")
-    print("\nType a question (Ctrl+C to exit):\n")
+
+    # Render header with metadata
+    console.print()
+    meta = {
+        "Model": Path(args.model_id).name if "/" in args.model_id else args.model_id,
+        "VDB": args.vdb_path.name,
+        "Chunks": len(_vdb.content),
+        "Reranker": "Enabled" if not args.no_reranker else "Disabled",
+        "Top-K": args.top_k,
+    }
+    render_header("MLX RAG CLI", meta)
+
+    # Render footer with commands
+    render_footer(["Type a question", "Ctrl+C to exit"])
+    console.print()
 
     # Use local references for the loop
     vdb = _vdb
@@ -139,9 +158,9 @@ def main() -> None:
 
     while True:
         try:
-            question = input("❓> ").strip()
+            question = console.input("[bold cyan]Question:[/bold cyan] ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nBye.")
+            console.print("\n[cyan]Bye.[/cyan]")
             break
 
         if not question:
@@ -149,7 +168,7 @@ def main() -> None:
 
         retrieved = vdb.query(question, k=20)
         if not retrieved:
-            print("[!] No documents retrieved for that question.")
+            console.print("[warning]No documents retrieved for that question.[/warning]\n")
             continue
 
         # Rerank if enabled, otherwise use raw VectorDB scores
@@ -165,14 +184,37 @@ def main() -> None:
 
         answer = model_engine.generate(prompt, max_tokens=args.max_tokens)
 
-        print("\n🔎 Retrieved context:")
-        print(summary or "(empty)")
-        print("\n💬 Answer:")
+        # Display results in a two-panel layout
+        console.print()
+
+        # Context panel (left side or top)
+        context_table = Table(title="Retrieved Context", show_header=True, header_style="bold cyan")
+        context_table.add_column("Source", style="dim", max_width=30)
+        context_table.add_column("Snippet", style="white", no_wrap=False)
+
+        for chunk in selected:
+            source = truncate_source_path(chunk.get("source", "unknown"), max_len=28)
+            snippet = shorten(chunk.get("text", ""), width=100, placeholder="...")
+            context_table.add_row(source, snippet)
+
+        console.print(context_table)
+
+        # Answer panel
+        console.print()
         if isinstance(answer, (dict, list)):
-            print(json.dumps(answer, indent=2, ensure_ascii=False))
+            answer_text = json.dumps(answer, indent=2, ensure_ascii=False)
         else:
-            print(strip_channel_controls(answer))
-        print("\n" + "-" * 60 + "\n")
+            answer_text = strip_channel_controls(answer)
+
+        console.print(
+            Panel(
+                answer_text,
+                title="Answer",
+                border_style="green",
+                padding=(1, 2),
+            )
+        )
+        console.print()
 
 
 if __name__ == "__main__":
