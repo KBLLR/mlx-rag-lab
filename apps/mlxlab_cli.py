@@ -1704,8 +1704,113 @@ def run_pipeline(pipeline_id: str):
         input("\n[dim]Press Enter to return to main menu...[/dim]")
 
 
+def models_management_menu():
+    """Unified models management: download, cache, delete."""
+    while True:
+        console.clear()
+        show_header()
+
+        console.print("[bold cyan]📦 Models Management[/bold cyan]\n")
+
+        # Show quick stats
+        cache_info = get_cache_info()
+        if cache_info:
+            total_size = cache_info.size_on_disk / 1e9
+            total_repos = len(cache_info.repos)
+            console.print(f"[dim]Cached models: {total_repos} ({total_size:.1f} GB)[/dim]\n")
+
+        action = inquirer.select(
+            message="Model Management:",
+            choices=[
+                Choice("download", name="📥 Download Models"),
+                Choice("view", name="📋 View Available Models"),
+                Choice("cache", name="💾 View Cache Details"),
+                Choice("delete", name="🗑️  Delete Cached Models"),
+                Separator(),
+                Choice("back", name="⬅️  Back to Main Menu"),
+            ],
+            default="download",
+        ).execute()
+
+        if action == "back":
+            break
+        elif action == "download":
+            download_model()
+        elif action == "view":
+            show_models_menu()
+        elif action == "cache":
+            show_cache_info()
+        elif action == "delete":
+            delete_cached_models()
+
+
+def system_management_menu():
+    """Unified system management: info, cleanup."""
+    while True:
+        console.clear()
+        show_header()
+
+        console.print("[bold cyan]💻 System Management[/bold cyan]\n")
+
+        action = inquirer.select(
+            message="System Management:",
+            choices=[
+                Choice("info", name="📊 System Information"),
+                Choice("cleanup", name="🧹 Clean Memory (MLX)"),
+                Separator(),
+                Choice("back", name="⬅️  Back to Main Menu"),
+            ],
+            default="info",
+        ).execute()
+
+        if action == "back":
+            break
+        elif action == "info":
+            show_system_info()
+        elif action == "cleanup":
+            console.print("\n[bold]🧹 Cleaning memory...[/bold]\n")
+            gc.collect()
+            console.print("[green]✓ Memory cleanup complete[/green]")
+            input("\n[dim]Press Enter to continue...[/dim]")
+
+
+def ui_settings_menu():
+    """UI Settings and preferences."""
+    console.clear()
+    show_header()
+
+    console.print("[bold cyan]🎨 UI Settings[/bold cyan]\n")
+    console.print("[yellow]UI Settings configuration coming soon![/yellow]\n")
+    console.print("[dim]Future features:[/dim]")
+    console.print("[dim]  • Theme selection (colors)[/dim]")
+    console.print("[dim]  • Layout preferences[/dim]")
+    console.print("[dim]  • Default model selections[/dim]")
+    console.print("[dim]  • Keyboard shortcuts[/dim]")
+
+    input("\n[dim]Press Enter to return...[/dim]")
+
+
+def user_menu():
+    """User profile and exit options."""
+    import getpass
+    username = getpass.getuser()
+
+    action = inquirer.select(
+        message=f"User: {username}",
+        choices=[
+            Choice("settings", name="⚙️  UI Settings"),
+            Choice("exit", name="🚪 Exit MLX Lab"),
+            Separator(),
+            Choice("back", name="⬅️  Back"),
+        ],
+        default="back",
+    ).execute()
+
+    return action
+
+
 def main_menu():
-    """Display and handle the main menu."""
+    """Display and handle the main menu with fixed header."""
     while True:
         console.clear()
         show_header()
@@ -1724,54 +1829,31 @@ def main_menu():
                 Choice("musicgen", name="🎵 MusicGen - Audio Generation"),
                 Choice("whisper", name="🎙️  Whisper - Speech-to-Text"),
                 Choice("bench", name="📊 Benchmark - Performance Testing"),
-                Separator("═══ GENERATORS ═══"),
+                Separator("═══ TOOLS ═══"),
                 Choice("generators", name="🧪 Generators - Dataset Tools"),
-                Separator("═══ MODEL MANAGEMENT ═══"),
-                Choice("download", name="📥 Download Models"),
-                Choice("models", name="📦 View Available Models"),
-                Choice("cache", name="💾 View HuggingFace Cache"),
-                Choice("delete", name="🗑️  Delete Cached Models"),
-                Separator("═══ SYSTEM ═══"),
-                Choice("system", name="💻 System Information"),
-                Choice("cleanup", name="🧹 Clean Memory (MLX)"),
-                Separator("═══ OTHER ═══"),
-                Choice("exit", name="🚪 Exit"),
+                Choice("models", name="📦 Models Management"),
+                Choice("system", name="💻 System Management"),
+                Separator(),
+                Choice("user", name="👤 User Menu"),
             ],
-            default="whisper",
+            default="chat",
         ).execute()
 
-        if action == "exit":
-            console.print("\n[cyan]👋 Goodbye![/cyan]\n")
-            break
+        if action == "user":
+            user_action = user_menu()
+            if user_action == "exit":
+                console.print("\n[cyan]👋 Goodbye![/cyan]\n")
+                break
+            elif user_action == "settings":
+                ui_settings_menu()
         elif action == "models":
-            console.clear()
-            show_header()
-            show_models_menu()
-        elif action == "cache":
-            console.clear()
-            show_header()
-            show_cache_info()
-        elif action == "delete":
-            console.clear()
-            show_header()
-            delete_cached_models()
-        elif action == "download":
-            console.clear()
-            show_header()
-            download_model()
+            models_management_menu()
         elif action == "generators":
             console.clear()
             show_header()
             configure_generators()
         elif action == "system":
-            console.clear()
-            show_header()
-            show_system_info()
-        elif action == "cleanup":
-            console.print("\n[bold]🧹 Cleaning memory...[/bold]\n")
-            gc.collect()
-            console.print("[green]✓ Memory cleanup complete[/green]")
-            input("\n[dim]Press Enter to continue...[/dim]")
+            system_management_menu()
         else:
             run_pipeline(action)
 
