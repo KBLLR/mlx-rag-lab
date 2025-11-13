@@ -41,6 +41,7 @@ src/rag/models/bert.py
 src/rag/models/hub.py
 src/rag/models/model.py
 src/rag/models/qwen_reranker.py
+src/rag/models/text_classifier.py
 src/rag/models/flux/__init__.py
 src/rag/models/flux/autoencoder.py
 src/rag/models/flux/clip.py

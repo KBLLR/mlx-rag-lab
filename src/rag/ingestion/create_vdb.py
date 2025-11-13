@@ -62,38 +62,17 @@ def gather_pdf_paths(paths: List[str]) -> List[Path]:
 def iter_documents_mlx(
     pdf_paths: List[Path], *, batch_size: int = 4, prefetch: int = 8
 ) -> Iterator[Tuple[str, str]]:
+    """
+    Iterate through PDFs and extract text.
+    Note: Currently using sequential processing due to mlx.data string handling issues.
+    """
     if not pdf_paths:
         return iter(())
 
-    samples = [{"pdf_path": str(path)} for path in pdf_paths]
-    buffer = dx.buffer_from_vector(samples)
-
-    def _load_text(sample):
-        path = Path(str(sample["pdf_path"]))
-        sample["text"] = extract_text(path)
-        sample["pdf_path"] = str(path)
-        return sample
-
-    batch_size = max(1, batch_size)
-    prefetch = max(1, prefetch)
-    num_threads = max(1, prefetch // 2)
-
-    stream = (
-        buffer.shuffle()
-        .to_stream()
-        .sample_transform(_load_text)
-        .batch(batch_size)
-        .prefetch(prefetch, num_threads)
-    )
-
-    def generator():
-        for batch in stream:
-            paths = batch["pdf_path"]
-            texts = batch["text"]
-            for path, text in zip(paths, texts):
-                yield str(path), str(text)
-
-    return generator()
+    # Simple sequential processing - mlx.data has issues with string/bytes handling
+    for path in pdf_paths:
+        text = extract_text(path)
+        yield str(path), text
 
 
 def ingest_bank(

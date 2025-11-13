@@ -1,0 +1,142 @@
+[MODEL: facebook/musicgen-small]
+params: 300M, mono, text-to-music, fast; best for sketches, loops, and rhythmic textures
+max_duration_seconds: ~30 per generation (longer via chained segments)
+strengths: low compute, quick iteration, good for simple motifs and background beds
+
+1. "Minimalist glitchy beat, 90 BPM, dry drum machine, gentle vinyl crackle, simple two-note bass, designed as a looping background for a terminal UI, no vocals"
+
+2. "Playful 8-bit chiptune arpeggios at 120 BPM, simple drum pattern, short 4-bar loop, good for menu navigation sounds, no reverb, clean and tight"
+
+3. "Soft ambient pads with subtle pulsating sidechain feel at 70 BPM, low-key and unobtrusive, suitable as background for AI lab dashboards, no lead melody"
+
+4. "Funky lo-fi hip hop groove at 85 BPM, warm bass, gentle electric piano chords, light swing on drums, loopable 4-bar structure, no vocals"
+
+5. "Dark tension drone with occasional percussive hits, 60 BPM, sparse and minimal, designed for system alerts and loading states, no melody, no vocals"
+
+6. "Techno-inspired kick and bass at 126 BPM, stripped-down, only drums and bassline, minimal hi-hats, designed as building block for longer club-oriented cues"
+
+
+[MODEL: facebook/musicgen-medium]
+params: 1.5B, mono, text-to-music, balanced quality vs speed
+max_duration_seconds: ~30 per generation
+strengths: better timbre, more convincing genre style, good for final-ish cues
+
+1. "Deep house groove at 122 BPM with warm analog bass, filtered chords, shuffled hi-hats, subtle clap reverb, smooth DJ-friendly loop, no vocals"
+
+2. "Afro-house rhythm at 120 BPM, syncopated percussion, log drums, subtle marimba motif, atmospheric pads, uplifting but not cheesy, club-ready texture"
+
+3. "Ballroom-inspired vogue beat at 128 BPM, sharp claps, snappy kicks, dramatic orchestral stabs, occasional vocal-like chops without intelligible lyrics"
+
+4. "Melancholic synthwave track at 100 BPM, wide analog pads, steady Linn-style drum machine, chorus-heavy electric guitar lead, nostalgic 80s mood"
+
+5. "Organic downtempo track at 90 BPM, brushed drums, upright bass, Rhodes chords, airy pads, hint of tape saturation, calm late-night vibe"
+
+6. "Experimental broken-beat at 135 BPM, shuffled drums, woozy detuned synths, bass with sidechain pump, glitch fills, suitable for complex UI transitions"
+
+
+[MODEL: facebook/musicgen-large]
+params: 3.3B, mono, text-to-music, highest fidelity
+max_duration_seconds: ~30 per generation
+strengths: richer arrangements, more nuanced dynamics, better genre blending
+
+1. "Epic hybrid orchestral plus electronic track at 120 BPM, deep cinematic drums, string ostinato, analog synth bass, evolving pads, dramatic build and subtle breakdown, no choir lyrics"
+
+2. "High-energy melodic techno at 128 BPM, rolling bassline, hypnotic arpeggiated lead, long reverb tails, subtle noise sweeps, arranged with intro, build, and mini-drop"
+
+3. "Jazz-infused house at 123 BPM, acoustic piano comping, walking bass morphing into synth bass, tight four-on-the-floor drums, occasional saxophone riffs, warm club mix"
+
+4. "Modern R&B slow jam at 85 BPM, swung drums, silky electric piano, sub bass, sparse guitar licks, atmospheric vocal chops without words, intimate and glossy"
+
+5. "Complex IDM track at 140 BPM, fractured drum programming, granular pads, evolving atonal lead, glitch edits, but still rhythmic and structured"
+
+6. "Big-room Afro-tech track at 124 BPM, heavy kick, layered percussion, deep male vocal-like chant without words, big reverb on claps, tension-building risers and drops"
+
+
+[MODEL: facebook/musicgen-melody]
+params: 1.5B, mono, text+melody conditioning
+max_duration_seconds: ~30 including input melody
+strengths: sticks to your input riff while changing style, good for theme variations
+
+1. "Take the input melody and transform it into a dreamy lofi hip hop track at 82 BPM, dusty drums, mellow Rhodes chords, vinyl noise, keep melody on electric piano"
+
+2. "Use the input melody as main hook in an Afro-house track at 120 BPM, percussive groove, log drums, warm sub bass, lush pads, festival-friendly but not overcompressed"
+
+3. "Turn the input melody into a melancholic string ensemble piece at 70 BPM, soft pizzicato in the background, legato violins carrying the theme, intimate chamber feel"
+
+4. "Reinterpret the input melody as a French house anthem at 124 BPM, sidechained filtered disco samples, punchy kick, bright hi-hats, strong dancefloor build"
+
+5. "Transform the input melody into a cinematic trailer cue at 90 BPM, low brass hits, string ostinato, impacts and risers, melody played by horns and choirs without intelligible words"
+
+6. "Convert the input melody into a UK garage-inspired track at 132 BPM, shuffled drums, wobbling bass, chopped chord stabs, keep melody as a vocal-like lead on a synth"
+
+
+[MODEL: facebook/musicgen-stereo-small]
+params: ~0.6B, stereo, text/audio, efficient
+max_duration_seconds: ~30 per generation
+strengths: quick stereo beds, ear-candy for UI, low resource footprint
+
+1. "Soft ambient soundscape, 65 BPM implied, wide stereo pads, distant reversed textures panning slowly, subtle sub bass, perfect as boot-up ambience for a futuristic OS"
+
+2. "Glitchy experimental beat at 100 BPM, center-focused kick and snare, hi-hats and fx panning left and right, short 8-bar loop for menu navigation"
+
+3. "Minimal techno at 126 BPM with centered kick and bass, stereo-clapping delay, percussive blips orbiting around the listener, dry master, club booth perspective"
+
+4. "Calm piano and synth texture at 70 BPM, piano centered, shimmer pad spread wide, soft noise layer drifting in stereo, meditative and neutral in mood"
+
+5. "Granular-style texture bed with no clear drums, stereo droplets of sound, subtle pitch shifts, suitable for background in a loading or rendering screen"
+
+6. "Crunchy low-fi electro beat at 115 BPM, mono-ish drums, stereo synth fx that answer each bar, designed to loop seamlessly in a HUD interface"
+
+
+[MODEL: facebook/musicgen-stereo-medium]
+params: ~2B, stereo, higher quality
+max_duration_seconds: ~30 per generation
+strengths: immersive stereo fields, more detailed mixes, good for scene-setting tracks
+
+1. "Afro-house track at 120 BPM with percussion layers spread around the stereo field, deep centered kick, warm sub bass, call-and-response synth plucks left and right"
+
+2. "Futuristic drum and bass at 170 BPM, tight centered drums, wide reese bass, atmospheric pads swirling in stereo, occasional risers sweeping from left to right"
+
+3. "Ballroom-vogue beat at 128 BPM, snare and claps slightly off-center for width, stabs bouncing in stereo, sub bass mono, designed for runway strutting energy"
+
+4. "Neo-soul band at 90 BPM, drums slightly behind the beat, electric bass centered, guitar and keys panned, subtle room ambience, live club vibe"
+
+5. "Cinematic ambient piece with evolving pads and distant percussive ticks, sounds emerging from different stereo positions like a surround-light installation"
+
+6. "Funky electro-house groove at 125 BPM, vocoder-like synth lines in stereo, slap bass centered, bright claps and rides panned, festival mainstage energy without vocals"
+
+
+[MODEL: facebook/musicgen-stereo-large]
+params: 3.3B, stereo, highest fidelity stereo model
+max_duration_seconds: ~30 per generation
+strengths: rich soundstage, complex arrangements, best for “finished” cues
+
+1. "High-energy Afro-tech banger at 124 BPM, powerful mono kick, layered stereo percussion, hypnotic vocal-like chant without words, evolving pads behind, mixed like a modern club record"
+
+2. "Epic cinematic orchestral plus electronic hybrid, 110 BPM, strings and brass spread across stereo field, taiko-style hits centered, synth bass and pulses, dramatic build and drop suitable for trailers"
+
+3. "Detailed deep house track at 122 BPM, sidechained pads, subtle background crowd noise in stereo, chord stabs swinging around, smooth and polished master-like sound"
+
+4. "Wide atmospheric drum and bass at 174 BPM, detailed breakbeats, deep sub, overhead cymbals panned, ethereal vocal pad textures floating above, emotional but energetic"
+
+5. "Modern pop-electronica at 100 BPM, crisp drums, warm synth bass, layered plucks, stereo guitars, vocoder-like hook without intelligible lyrics, radio-ready mix"
+
+6. "Complex IDM/ambient crossover, irregular rhythms, granular textures flying across stereo field, deep sub pulses, glitchy micro-edits, evolving structure over 24–30 seconds"
+
+
+[MODEL: facebook/musicgen-stereo-melody-large]
+params: large (~3B), stereo, text+melody conditioning
+max_duration_seconds: ~30 including input melody
+strengths: high-fidelity stereo arrangements that stay loyal to a supplied motif
+
+1. "Use the input melody as main hook in a widescreen cinematic piece at 80 BPM, strings and piano sharing the motif, spacious reverb, subtle electronic pulses, immersive stereo field"
+
+2. "Transform the input melody into a festival-ready melodic techno anthem at 128 BPM, strong sidechained pads, driving bass, big stereo lead playing the motif, crowd-ready breakdown and build"
+
+3. "Reinterpret the input melody as a soulful house track at 123 BPM, Rhodes chords and guitar licks in stereo, warm bass, vocal-like synth leading the motif, uplifting but tasteful"
+
+4. "Turn the input melody into an Afro-fusion track at 118 BPM, live-percussion feel across stereo, bass centered, marimbas and guitars echoing the motif, modern club mix"
+
+5. "Convert the input melody into an emotional drum and bass roller at 172 BPM, liquid-style pads, rolling sub, breakbeats, stereo piano and strings doubling the motif, cinematic and energetic"
+
+6. "Morph the input melody into an experimental ambient piece with sparse percussion, motif played by processed synth bells and granular textures, sounds slowly drifting around the stereo field"

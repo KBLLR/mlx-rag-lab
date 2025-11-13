@@ -18,6 +18,13 @@ Requires-Dist: numpy>=1.26
 Requires-Dist: tqdm>=4.66
 Requires-Dist: requests>=2.32
 Requires-Dist: soundfile>=0.12.1
+Requires-Dist: torch>=2.5.1
+Requires-Dist: torchaudio>=2.5.1
+Requires-Dist: kokoro>=0.9.2
+Requires-Dist: whisperx@ git+https://github.com/sooth/whisperx-mlx.git
+Requires-Dist: sounddevice>=0.4.7
+Requires-Dist: pynput>=1.7.6
+Requires-Dist: pip>=24.0
 Requires-Dist: regex
 Requires-Dist: Pillow
 Requires-Dist: sentencepiece

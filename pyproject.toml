@@ -22,6 +22,13 @@ dependencies = [
   "tqdm>=4.66",
   "requests>=2.32",
   "soundfile>=0.12.1", # Required for saving audio files
+  "torch>=2.5.1", # Needed for pyannote + MLX whisper integrations
+  "torchaudio>=2.5.1", # Matches torch 2.5 API (AudioMetaData) for diarization
+  "kokoro>=0.9.2", # Kokoro TTS with phoneme output for avatar lip-sync
+  "whisperx @ git+https://github.com/sooth/whisperx-mlx.git", # WhisperX fork with MLX backend + diarization
+  "sounddevice>=0.4.7", # Live audio capture/playback for push-to-talk
+  "pynput>=1.7.6", # Keyboard listener for push-to-talk mode
+  "pip>=24.0", # Required by kokoro due to spaCy issue (temporary workaround)
   "regex",
   "Pillow",
   "sentencepiece",
@@ -37,10 +44,15 @@ dependencies = [
 [project.scripts]
 mlxlab = "rag.cli.entrypoints:mlxlab_main"
 rag-cli = "rag.cli.entrypoints:rag_cli_main"
+chat-cli = "rag.cli.entrypoints:chat_cli_main"
+voice-chat-cli = "rag.cli.entrypoints:voice_chat_cli_main"
+sts-avatar-cli = "rag.cli.entrypoints:sts_avatar_cli_main"
 flux-cli = "rag.cli.entrypoints:flux_cli_main"
 bench-cli = "rag.cli.entrypoints:bench_cli_main"
 musicgen-cli = "rag.cli.entrypoints:musicgen_cli_main"
 whisper-cli = "rag.cli.entrypoints:whisper_cli_main"
+ingest-cli = "rag.cli.entrypoints:ingest_cli_main"
+classify-cli = "rag.cli.entrypoints:classify_cli_main"
 
 # Optional extras (if you ever publish / want pip install .[pdf,dev] behavior)
 [project.optional-dependencies]
