@@ -17,14 +17,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.text import Text
 
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.chat.templates import strip_channel_controls
+from ui import FramedApp, get_console, label
 
-console = Console()
+console = get_console()
 
 DEFAULT_MODEL_ID = "mlx-models/gpt-oss-20b-mxfp4"
 FALLBACK_MODEL_ID = "mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx"
@@ -250,7 +251,8 @@ def print_help_panel() -> None:
 def main() -> None:
     global _model_engine
 
-    signal.signal(signal.SIGINT, cleanup_handler)
+    # Don't register signal handler - let FramedApp context manager handle it
+    # signal.signal(signal.SIGINT, cleanup_handler)
 
     args = build_parser().parse_args()
 
@@ -276,96 +278,140 @@ def main() -> None:
     console.print(f"\n[bold cyan]Loading model...[/bold cyan]")
     _model_engine = MLXModelEngine(model_id, model_type="text")
     model_engine = _model_engine
+    console.print("[green]Model loaded successfully![/green]\n")
 
-    console.print()
-    console.print(
-        Panel.fit(
-            (
-                f"[bold cyan]MLX Chat CLI[/bold cyan]\n"
-                f"Model: {model_id}\n"
-                f"Mode: {args.mode}\n"
-                f"Max tokens: {args.max_tokens}\n"
-            ),
-            border_style="cyan",
-        )
-    )
-    console.print(f"\n[dim]System ({args.mode}): {system_prompt}[/dim]\n")
-    console.print("[dim]Type your message (Ctrl+C to hard-exit, or /exit to exit cleanly)[/dim]\n")
+    # Create framed app
+    app = FramedApp("chat", viewport_height=20)
+
+    # Set footer with commands
+    footer_text = Text()
+    footer_text.append("Commands: ", style="dim")
+    footer_text.append("/help /history /clear /mode /exit", style="cyan")
+    app.set_footer(footer_text)
+
+    # Add system prompt to body
+    model_name = Path(model_id).name if "/" in model_id else model_id
+    app.add_content(label(f"System: {system_prompt}", "muted"))
+    app.add_content(label(f"Model: {model_name} | Mode: {args.mode} | Max Tokens: {args.max_tokens}", "muted"))
+    app.add_content(Text(""))
 
     history: List[Dict] = []
 
-    while True:
-        try:
-            user_input = console.input("[bold green]You:[/bold green] ").strip()
-        except (EOFError, KeyboardInterrupt):
-            console.print("\n[cyan]Bye.[/cyan]")
-            break
+    try:
+        with app.run():
+            while True:
+                try:
+                    # Exit the Live context temporarily for input
+                    if app._live:
+                        app._live.__exit__(None, None, None)
 
-        if not user_input:
-            continue
+                    user_input = console.input("[bold green]You:[/bold green] ").strip()
 
-        lowered = user_input.lower()
-        if lowered in ("/exit", "/quit", "/q"):
-            console.print("\n[cyan]Bye.[/cyan]")
-            break
-        elif lowered == "/clear":
-            history = []
-            console.clear()
-            console.print("[yellow]Conversation history cleared.[/yellow]\n")
-            continue
-        elif lowered == "/history":
-            if not history:
-                console.print("[dim]History is empty.[/dim]\n")
-                continue
-            rendered: list[str] = []
-            for msg in history:
-                if msg["role"] == "user":
-                    rendered.append(f"[green]User:[/green] {msg['content']}")
-                else:
-                    rendered.append(f"[cyan]Assistant:[/cyan] {msg['content']}")
-            console.print(
-                Panel(
-                    "\n".join(rendered),
-                    title="Conversation History",
-                    border_style="blue",
+                    # Re-enter Live context
+                    if app._running and app._live:
+                        app._live.__enter__()
+
+                except (EOFError, KeyboardInterrupt):
+                    console.print("\n[cyan]Bye.[/cyan]")
+                    break
+
+                if not user_input:
+                    continue
+
+                lowered = user_input.lower()
+                if lowered in ("/exit", "/quit", "/q"):
+                    console.print("\n[cyan]Bye.[/cyan]")
+                    break
+                elif lowered == "/clear":
+                    history = []
+                    app.clear_body()
+                    app.add_content(label(f"System: {system_prompt}", "muted"))
+                    app.add_content(label(f"Model: {model_name} | Mode: {args.mode}", "muted"))
+                    app.add_content(Text(""))
+                    app.refresh()
+                    continue
+                elif lowered == "/history":
+                    if not history:
+                        app.add_content(label("History is empty.", "muted"))
+                        app.refresh()
+                        continue
+                    app.add_content(Text(""))
+                    app.add_content(label(f"=== History ({len(history)} messages) ===", "accent"))
+                    for msg in history:
+                        role_text = Text()
+                        if msg["role"] == "user":
+                            role_text.append("You: ", style="bold green")
+                        else:
+                            role_text.append("Assistant: ", style="bold cyan")
+                        role_text.append(msg["content"])
+                        app.add_content(role_text)
+                    app.add_content(label("=== End History ===", "accent"))
+                    app.refresh()
+                    continue
+                elif lowered in ("/help", "/?"):
+                    app.add_content(Text(""))
+                    app.add_content(label("=== Commands ===", "accent"))
+                    app.add_content(label("  /help - show this help", "secondary"))
+                    app.add_content(label("  /history - show conversation history", "secondary"))
+                    app.add_content(label("  /clear - clear history", "secondary"))
+                    app.add_content(label("  /mode - show current mode", "secondary"))
+                    app.add_content(label("  /exit, /quit, /q - exit chat", "secondary"))
+                    app.refresh()
+                    continue
+                elif lowered == "/mode":
+                    app.add_content(label(f"Current mode: {args.mode}", "accent"))
+                    app.refresh()
+                    continue
+
+                # Add user message to display
+                user_msg = Text()
+                user_msg.append("You: ", style="bold green")
+                user_msg.append(user_input)
+                app.add_content(user_msg)
+                app.refresh()
+
+                prompt = format_chat_prompt(
+                    system_prompt,
+                    history,
+                    user_input,
+                    tokenizer=model_engine.tokenizer,
                 )
-            )
-            continue
-        elif lowered in ("/help", "/?"):
-            print_help_panel()
-            continue
-        elif lowered == "/mode":
-            console.print(f"[cyan]Current mode:[/cyan] {args.mode}\n")
-            continue
 
-        prompt = format_chat_prompt(
-            system_prompt,
-            history,
-            user_input,
-            tokenizer=model_engine.tokenizer,
-        )
+                try:
+                    response_text = model_engine.generate(
+                        prompt,
+                        max_tokens=args.max_tokens,
+                    )
+                    if isinstance(response_text, (dict, list)):
+                        response_text = json.dumps(response_text, indent=2, ensure_ascii=False)
+                    response_text = strip_channel_controls(response_text or "")
 
-        console.print("\n[bold cyan]Assistant:[/bold cyan] ", end="")
+                    # Add assistant message to display
+                    assistant_msg = Text()
+                    assistant_msg.append("Assistant: ", style="bold cyan")
+                    assistant_msg.append(response_text)
+                    app.add_content(assistant_msg)
+                    app.add_content(Text(""))  # Blank line for spacing
+                    app.refresh()
 
-        try:
-            response_text = model_engine.generate(
-                prompt,
-                max_tokens=args.max_tokens,
-            )
-            if isinstance(response_text, (dict, list)):
-                response_text = json.dumps(response_text, indent=2, ensure_ascii=False)
-            response_text = strip_channel_controls(response_text or "")
-            console.print(response_text)
+                    history.append({"role": "user", "content": user_input})
+                    history.append({"role": "assistant", "content": response_text})
 
-            history.append({"role": "user", "content": user_input})
-            history.append({"role": "assistant", "content": response_text})
-
-        except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
-            console.print("[yellow]Continuing...[/yellow]\n")
-            continue
-
-        console.print()
+                except Exception as e:
+                    error_msg = Text()
+                    error_msg.append("Error: ", style="bold red")
+                    error_msg.append(str(e), style="red")
+                    app.add_content(error_msg)
+                    app.refresh()
+                    continue
+    finally:
+        # Cleanup
+        if _model_engine is not None:
+            console.print("\n🧹 Cleaning up...", style="yellow")
+            del _model_engine
+            _model_engine = None
+            gc.collect()
+            console.print("✅ Cleanup complete. Bye.\n", style="green")
 
     if history:
         if args.classify_on_exit:

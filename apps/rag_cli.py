@@ -6,10 +6,18 @@ import sys
 from pathlib import Path
 from textwrap import shorten
 
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.table import Table
+from rich.text import Text
+
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.chat.templates import strip_channel_controls
 from rag.models.qwen_reranker import QwenReranker
 from rag.retrieval.vdb import VectorDB
+from ui import FramedApp, get_console, label, build_rag_dashboard
+
+console = get_console()
 
 DEFAULT_VDB_PATH = Path("var/indexes/vdb.npz")
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
@@ -88,7 +96,7 @@ def cleanup_handler(signum, frame):
     """Handle Ctrl+C gracefully by cleaning up MLX resources and multiprocessing."""
     global _model_engine, _reranker, _vdb
 
-    print("\n\n🧹 Cleaning up resources...")
+    console.print("\n\n[yellow]Cleaning up resources...[/yellow]")
 
     # Delete MLX models to free GPU/unified memory
     if _model_engine is not None:
@@ -106,7 +114,7 @@ def cleanup_handler(signum, frame):
     # Force garbage collection to release memory
     gc.collect()
 
-    print("✅ Cleanup complete. Bye.\n")
+    console.print("[success]Cleanup complete. Bye.[/success]\n")
     sys.exit(0)
 
 
@@ -117,62 +125,120 @@ def main() -> None:
     signal.signal(signal.SIGINT, cleanup_handler)
 
     args = build_parser().parse_args()
+
+    console.print("\n[bold cyan]Loading RAG system...[/bold cyan]")
     _vdb = VectorDB(str(args.vdb_path))
 
     # Make reranker optional to avoid timeouts/semaphore leaks
     if args.no_reranker:
         _reranker = None
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
-        print(f"Using model {args.model_id} (reranker disabled)")
     else:
         _reranker = QwenReranker(args.reranker_id)
-        print(f"Loaded VDB from {args.vdb_path.resolve()} ({len(_vdb.content)} chunks)")
-        print(f"Using model {args.model_id} and reranker {args.reranker_id}")
 
     _model_engine = MLXModelEngine(args.model_id, model_type="text")
-    print("\nType a question (Ctrl+C to exit):\n")
+    console.print("[green]RAG system loaded successfully![/green]\n")
 
     # Use local references for the loop
     vdb = _vdb
     reranker = _reranker
     model_engine = _model_engine
 
-    while True:
-        try:
-            question = input("❓> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nBye.")
-            break
+    # Create framed app
+    app = FramedApp("rag", viewport_height=20)
 
-        if not question:
-            continue
+    # Set footer
+    footer_text = Text()
+    footer_text.append("Ask a question | ", style="dim")
+    footer_text.append("Ctrl+C to exit", style="cyan")
+    app.set_footer(footer_text)
 
-        retrieved = vdb.query(question, k=20)
-        if not retrieved:
-            print("[!] No documents retrieved for that question.")
-            continue
+    # Add dashboard to body
+    model_name = Path(args.model_id).name if "/" in args.model_id else args.model_id
+    dashboard = build_rag_dashboard(
+        vdb_path=str(args.vdb_path),
+        num_chunks=len(vdb.content),
+        model_name=model_name,
+    )
+    app.add_content(dashboard)
+    app.add_content(Text(""))
+    app.add_content(label(f"Reranker: {'Enabled' if not args.no_reranker else 'Disabled'} | Top-K: {args.top_k}", "muted"))
+    app.add_content(Text(""))
 
-        # Rerank if enabled, otherwise use raw VectorDB scores
-        if reranker is not None:
-            candidate_texts = [chunk["text"] for chunk in retrieved]
-            ranks = reranker.rank(question, candidate_texts)
-            selected = [retrieved[idx] for idx in ranks[: args.top_k]]
-        else:
-            selected = retrieved[: args.top_k]
+    last_query = None
 
-        context, summary = format_context(selected)
-        prompt = build_prompt(context, question)
+    with app.run():
+        while True:
+            try:
+                # Exit the Live context temporarily for input
+                if app._live:
+                    app._live.__exit__(None, None, None)
 
-        answer = model_engine.generate(prompt, max_tokens=args.max_tokens)
+                question = console.input("[bold cyan]Question:[/bold cyan] ").strip()
 
-        print("\n🔎 Retrieved context:")
-        print(summary or "(empty)")
-        print("\n💬 Answer:")
-        if isinstance(answer, (dict, list)):
-            print(json.dumps(answer, indent=2, ensure_ascii=False))
-        else:
-            print(strip_channel_controls(answer))
-        print("\n" + "-" * 60 + "\n")
+                # Re-enter Live context
+                if app._running and app._live:
+                    app._live.__enter__()
+
+            except (EOFError, KeyboardInterrupt):
+                console.print("\n[cyan]Bye.[/cyan]")
+                break
+
+            if not question:
+                continue
+
+            last_query = question
+
+            # Add question to display
+            q_text = Text()
+            q_text.append("Q: ", style="bold cyan")
+            q_text.append(question)
+            app.add_content(q_text)
+            app.refresh()
+
+            retrieved = vdb.query(question, k=20)
+            if not retrieved:
+                app.add_content(label("No documents retrieved for that question.", "warning"))
+                app.add_content(Text(""))
+                app.refresh()
+                continue
+
+            # Rerank if enabled, otherwise use raw VectorDB scores
+            if reranker is not None:
+                candidate_texts = [chunk["text"] for chunk in retrieved]
+                ranks = reranker.rank(question, candidate_texts)
+                selected = [retrieved[idx] for idx in ranks[: args.top_k]]
+            else:
+                selected = retrieved[: args.top_k]
+
+            context, summary = format_context(selected)
+            prompt = build_prompt(context, question)
+
+            answer = model_engine.generate(prompt, max_tokens=args.max_tokens)
+
+            # Display retrieved context
+            app.add_content(label(f"Retrieved {len(selected)} chunks:", "secondary"))
+            for i, chunk in enumerate(selected, 1):
+                source = chunk.get("source", "unknown")
+                snippet = shorten(chunk.get("text", ""), width=120, placeholder="...")
+                chunk_text = Text()
+                chunk_text.append(f"  [{i}] ", style="dim")
+                chunk_text.append(f"{Path(source).name}: ", style="cyan")
+                chunk_text.append(snippet, style="dim")
+                app.add_content(chunk_text)
+
+            # Display answer
+            app.add_content(Text(""))
+            if isinstance(answer, (dict, list)):
+                answer_text = json.dumps(answer, indent=2, ensure_ascii=False)
+            else:
+                answer_text = strip_channel_controls(answer)
+
+            answer_msg = Text()
+            answer_msg.append("A: ", style="bold green")
+            answer_msg.append(answer_text)
+            app.add_content(answer_msg)
+            app.add_content(Text(""))
+            app.refresh()
 
 
 if __name__ == "__main__":
