@@ -1824,6 +1824,7 @@ def main_menu():
                 Choice("generators", name="🧪 Generators - Dataset Tools"),
                 Choice("models", name="📦 Models Management"),
                 Choice("system", name="💻 System Management"),
+                Choice("ui_settings", name="🎨 UI Settings - Themes & Layout"),
                 Separator(),
                 Choice("user", name="👤 User Menu"),
             ],
@@ -1845,6 +1846,8 @@ def main_menu():
             configure_generators()
         elif action == "system":
             system_management_menu()
+        elif action == "ui_settings":
+            ui_settings_menu()
         else:
             run_pipeline(action)
 
