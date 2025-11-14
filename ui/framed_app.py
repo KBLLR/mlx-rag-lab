@@ -291,7 +291,6 @@ Usage:
             self._layout,
             console=self.console,
             screen=True,
-            auto_refresh=False,
             refresh_per_second=self.refresh_rate,
         )
         self._live.__enter__()
