@@ -26,8 +26,8 @@ DEFAULT_SETTINGS: UISettings = {
     "transparent_frame": False,
 }
 
-# Repo root = 4 levels above this file
-REPO_ROOT = Path(__file__).resolve().parents[4]
+# Repo root = 1 level above this file (ui/ -> mlx-rag-lab/)
+REPO_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_FILE = REPO_ROOT / "var" / "ui_settings.json"
 
 

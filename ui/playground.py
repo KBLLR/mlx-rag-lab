@@ -153,6 +153,16 @@ def _show_preview(
     preset_name: Optional[str] = None,
 ) -> None:
     """Render a live preview frame with given settings."""
+    # Temporarily apply settings to preview the theme
+    from .theme import reload_theme
+
+    # Save current settings
+    current_settings = load_ui_settings()
+
+    # Temporarily save and apply preview settings
+    save_ui_settings(settings)
+    reload_theme()
+
     body = _build_settings_preview(settings, preset_name)
 
     footer = Text(
@@ -171,6 +181,10 @@ def _show_preview(
     ):
         time.sleep(0.5)
         input()  # no prompt, just "press enter"
+
+    # Restore original settings after preview
+    save_ui_settings(current_settings)
+    reload_theme()
 
 
 def _choose_preset(
