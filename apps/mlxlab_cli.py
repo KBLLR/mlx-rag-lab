@@ -26,8 +26,9 @@ from experiments.dataset_generation.generate_qa_dataset import (
     QAGenerationConfig,
     generate_qa_dataset,
 )
+from ui import get_console, Card, show_card_menu, run_ui_playground, APP_METADATA
 
-console = Console()
+console = get_console()
 
 # Pipeline ASCII art headers
 PIPELINE_HEADERS = {
@@ -1777,17 +1778,7 @@ def system_management_menu():
 def ui_settings_menu():
     """UI Settings and preferences."""
     console.clear()
-    show_header()
-
-    console.print("[bold cyan]🎨 UI Settings[/bold cyan]\n")
-    console.print("[yellow]UI Settings configuration coming soon![/yellow]\n")
-    console.print("[dim]Future features:[/dim]")
-    console.print("[dim]  • Theme selection (colors)[/dim]")
-    console.print("[dim]  • Layout preferences[/dim]")
-    console.print("[dim]  • Default model selections[/dim]")
-    console.print("[dim]  • Keyboard shortcuts[/dim]")
-
-    input("\n[dim]Press Enter to return...[/dim]")
+    run_ui_playground(console)
 
 
 def user_menu():
