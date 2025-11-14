@@ -181,7 +181,7 @@ def get_app_frame(
 
     header_text = Text(
         metadata["ascii"],
-        style=style(f"app.{app_id}", True, bold=True),
+        style=style(f"app.{app_id}", bold=True),
     )
     header = Align.center(header_text)
 
