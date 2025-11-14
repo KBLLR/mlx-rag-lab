@@ -78,7 +78,7 @@ _current_theme_tokens: dict | None = None
 
 def _load_settings():
     """Load UI settings from file."""
-    from settings import SETTINGS_FILE
+    from .settings import SETTINGS_FILE
 
     if SETTINGS_FILE.exists():
         try:
