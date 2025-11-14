@@ -1,284 +1,332 @@
 """
-framed_app.py
-
-Rich-based framed layout helper for CLI apps.
-
-Provides a fixed FRAME:
-    ┌───────────────────────────────┐
-    │ HEADER (fixed height)        │
-    ├───────────────────────────────┤
-    │ BODY (expands / scroll area) │
-    ├───────────────────────────────┤
-    │ FOOTER (fixed height)        │
-    └───────────────────────────────┘
-
-Usage example
--------------
-
-from rich.text import Text
-from rich.panel import Panel
-from .framed_app import FramedApp, FrameConfig
-
-def main():
-    app = FramedApp(title="MLX Lab", config=FrameConfig())
-    app.set_header(Text("MLX Lab · Local-first pipelines", style="bold cyan"))
-    app.set_body(Panel("Body content goes here"))
-    app.set_footer(Text("↑↓ navigate · q quit", style="dim"))
-
-    # Simple loop example
-    def tick(app: FramedApp) -> bool:
-        # Return False to exit, True to continue
-        return True
-
-    app.run(tick=tick)
-
-if __name__ == "__main__":
-    main()
+Full-screen framed app with fixed header/footer and scrollable body.
+For apps that need true device frame layout with scroll support.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Optional, Protocol
+import threading
+from typing import Callable, List, Optional
 
 from rich.align import Align
-from rich.console import Console, RenderableType
+from rich.console import Console, Group, RenderableType
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
+from .app_frames import APP_METADATA
+from .theme import get_app_color, get_console, style
 
-class TickFn(Protocol):
-    def __call__(self, app: "FramedApp") -> bool:
+
+class ScrollableBody:
+    """Manages scrollable content with viewport tracking."""
+
+    def __init__(self, max_lines: int = 1000) -> None:
+        self.lines: List[RenderableType] = []
+        self.scroll_offset: int = 0
+        self.max_lines: int = max_lines
+        self.auto_scroll: bool = True
+        self._lock = threading.Lock()
+
+    def add_line(self, line: RenderableType) -> None:
+        """Append a single line to the scrollback."""
+        with self._lock:
+            self.lines.append(line)
+
+            # Trim scrollback if it exceeds max_lines
+            if len(self.lines) > self.max_lines:
+                self.lines = self.lines[-self.max_lines :]
+
+            # If user has scrolled up, try to keep view stable
+            if self.scroll_offset > 0:
+                self.scroll_offset = max(0, self.scroll_offset - 1)
+
+            # Auto-scroll to bottom if enabled
+            if self.auto_scroll:
+                self.scroll_offset = max(0, len(self.lines) - 1)
+
+    def add_lines(self, lines: List[RenderableType]) -> None:
+        """Append multiple lines to the scrollback."""
+        with self._lock:
+            self.lines.extend(lines)
+
+            if len(self.lines) > self.max_lines:
+                self.lines = self.lines[-self.max_lines :]
+
+            if self.auto_scroll:
+                self.scroll_offset = max(0, len(self.lines) - 1)
+
+    def clear(self) -> None:
+        """Clear all lines and reset scroll."""
+        with self._lock:
+            self.lines = []
+            self.scroll_offset = 0
+
+    def scroll_up(self, amount: int = 1) -> None:
+        """Scroll up by a number of lines."""
+        with self._lock:
+            self.auto_scroll = False
+            self.scroll_offset = max(0, self.scroll_offset - amount)
+
+    def scroll_down(self, amount: int = 1, viewport_height: int = 10) -> None:
+        """Scroll down by a number of lines, re-enabling auto-scroll at bottom."""
+        with self._lock:
+            max_offset = max(0, len(self.lines) - viewport_height)
+            self.scroll_offset = min(
+                max_offset, self.scroll_offset + amount
+            )
+            if self.scroll_offset >= max_offset:
+                self.auto_scroll = True
+
+    def scroll_to_bottom(self, viewport_height: int = 10) -> None:
+        """Jump directly to bottom and re-enable auto-scroll."""
+        with self._lock:
+            self.auto_scroll = True
+            self.scroll_offset = max(0, len(self.lines) - viewport_height)
+
+    def get_visible_lines(self, viewport_height: int) -> List[RenderableType]:
         """
-        Called every iteration when using FramedApp.run().
-
-        Return:
-            True  → continue loop
-            False → stop loop
+        Return the slice of lines currently visible given the viewport height.
+        Pads with empty Text to fill the viewport if needed.
         """
+        with self._lock:
+            if not self.lines:
+                # One empty muted line if there is nothing
+                return [
+                    Text("", style=style("text.muted")),
+                ]
 
+            start = self.scroll_offset
+            end = min(len(self.lines), start + viewport_height)
+            visible = self.lines[start:end]
 
-@dataclass
-class FrameConfig:
-    """Configuration for the framed layout."""
+            # Pad to viewport height
+            while len(visible) < viewport_height:
+                visible.append(Text(""))
 
-    header_height: int = 3
-    footer_height: int = 3
-    refresh_per_second: int = 20
-    screen: bool = False
-    transient: bool = False
-    redirect_stdout: bool = True
-    redirect_stderr: bool = True
-    # Optional default styles
-    header_style: str = "bold cyan"
-    footer_style: str = "dim"
-    border_style: str = "blue"
-    body_border_style: str = "dim"
-    pad_body: bool = True
+            return visible
 
+    def get_scroll_indicator(self, viewport_height: int) -> str:
+        """
+        Return a string like " [1-10/123]" when content overflows viewport,
+        or empty string when everything fits.
+        """
+        total = len(self.lines)
+        if total <= viewport_height:
+            return ""
 
-@dataclass
-class FrameState:
-    """Current renderables held by the frame."""
-
-    header: RenderableType = field(
-        default_factory=lambda: Text("", style="bold cyan")
-    )
-    body: RenderableType = field(
-        default_factory=lambda: Text("Body not set", style="dim")
-    )
-    footer: RenderableType = field(
-        default_factory=lambda: Text("", style="dim")
-    )
+        current = self.scroll_offset + 1
+        end = min(total, self.scroll_offset + viewport_height)
+        return f" [{current}-{end}/{total}]"
 
 
 class FramedApp:
     """
-    Base framed application helper.
+Full-screen app with fixed header/footer and scrollable body.
 
-    Responsibilities:
-    - Own a Rich Console
-    - Build and manage a Layout with header / body / footer
-    - Provide simple setters to update sections
-    - Optionally manage a Live loop with `.run()`
+Usage:
+    app = FramedApp("chat")
+    app.set_footer("Type /help for commands")
+
+    with app.run():
+        app.add_content(Text("User: Hello"))
+        app.add_content(Text("Assistant: Hi there!"))
     """
 
     def __init__(
         self,
-        *,
+        app_id: str,
         console: Optional[Console] = None,
-        title: Optional[str] = None,
-        config: Optional[FrameConfig] = None,
+        viewport_height: int = 20,
+        refresh_rate: int = 10,
     ) -> None:
-        self.console: Console = console or Console()
-        self.title: Optional[str] = title
-        self.config: FrameConfig = config or FrameConfig()
-        self.state: FrameState = FrameState()
+        self.app_id: str = app_id
+        self.console: Console = console or get_console()
+        self.viewport_height: int = viewport_height
+        self.refresh_rate: int = refresh_rate
 
-        # Build the initial layout
-        self.layout: Layout = self._build_layout()
-        self._apply_state_to_layout()
+        # Pull metadata, defaulting to "mlxlab"
+        self.metadata: dict = APP_METADATA.get(
+            app_id, APP_METADATA.get("mlxlab", {})
+        )
+
+        self.color_token: str = get_app_color(app_id)
+
+        self.body: ScrollableBody = ScrollableBody()
+        self.footer_text: Optional[RenderableType] = None
+
+        self._live: Optional[Live] = None
+        self._layout: Optional[Layout] = None
+        self._running: bool = False
 
     # -------------------------------------------------------------------------
-    # Layout construction
+    # Public API
+    # -------------------------------------------------------------------------
+
+    def set_footer(self, text: RenderableType) -> None:
+        """Set footer content (text or any renderable)."""
+        self.footer_text = text
+
+    def add_content(self, line: RenderableType) -> None:
+        """Append a single line to the scrollable body."""
+        self.body.add_line(line)
+
+    def add_lines(self, lines: List[RenderableType]) -> None:
+        """Append multiple lines to the scrollable body."""
+        self.body.add_lines(lines)
+
+    def clear_body(self) -> None:
+        """Clear all content in the scrollable body."""
+        self.body.clear()
+
+    # -------------------------------------------------------------------------
+    # Layout + rendering
     # -------------------------------------------------------------------------
 
     def _build_layout(self) -> Layout:
-        """Create the base header/body/footer layout."""
-        root = Layout(name="root")
-
-        # Top-level vertical split
-        root.split_column(
-            Layout(name="header", size=self.config.header_height),
-            Layout(name="body", ratio=1),
-            Layout(name="footer", size=self.config.footer_height),
+        """Create top-level layout with header, body, footer regions."""
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=7),
+            Layout(name="body"),
+            Layout(name="footer", size=3),
         )
+        return layout
 
-        return root
-
-    # -------------------------------------------------------------------------
-    # State → Layout mapping
-    # -------------------------------------------------------------------------
-
-    def _render_header(self) -> RenderableType:
-        header = self.state.header
-        if isinstance(header, str):
-            header = Text(header, style=self.config.header_style)
-
-        panel = Panel(
-            Align.left(header),
-            style=self.config.border_style,
-            border_style=self.config.border_style,
-            padding=(0, 1),
-            title=self.title,
-            title_align="left",
-        )
-        return panel
-
-    def _render_body(self) -> RenderableType:
-        body = self.state.body
-
-        if self.config.pad_body:
-            body = Panel(
-                body,
-                border_style=self.config.body_border_style,
-                padding=(0, 1),
-            )
-
-        return body
-
-    def _render_footer(self) -> RenderableType:
-        footer = self.state.footer
-        if isinstance(footer, str):
-            footer = Text(footer, style=self.config.footer_style)
-
-        panel = Panel(
-            Align.left(footer),
-            style=self.config.border_style,
-            border_style=self.config.border_style,
-            padding=(0, 1),
-        )
-        return panel
-
-    def _apply_state_to_layout(self) -> None:
-        """Sync FrameState into Layout renderables."""
-        self.layout["header"].update(self._render_header())
-        self.layout["body"].update(self._render_body())
-        self.layout["footer"].update(self._render_footer())
-
-    # -------------------------------------------------------------------------
-    # Public API: section setters
-    # -------------------------------------------------------------------------
-
-    def set_header(self, renderable: RenderableType) -> None:
-        """Update header renderable and refresh layout."""
-        self.state.header = renderable
-        self.layout["header"].update(self._render_header())
-
-    def set_body(self, renderable: RenderableType) -> None:
-        """Update body renderable and refresh layout."""
-        self.state.body = renderable
-        self.layout["body"].update(self._render_body())
-
-    def set_footer(self, renderable: RenderableType) -> None:
-        """Update footer renderable and refresh layout."""
-        self.state.footer = renderable
-        self.layout["footer"].update(self._render_footer())
-
-    # -------------------------------------------------------------------------
-    # Live helpers
-    # -------------------------------------------------------------------------
-
-    def create_live(self, **kwargs) -> Live:
-        """
-        Create a Live context for manual control.
-
-        Example:
-            app = FramedApp()
-            app.set_header("Header")
-            app.set_body("Body")
-            app.set_footer("Footer")
-
-            with app.create_live() as live:
-                ... # update app.set_body(...) etc, Live will redraw
-        """
-        live = Live(
-            self.layout,
-            console=self.console,
-            refresh_per_second=self.config.refresh_per_second,
-            screen=self.config.screen,
-            transient=self.config.transient,
-            redirect_stdout=self.config.redirect_stdout,
-            redirect_stderr=self.config.redirect_stderr,
-            **kwargs,
-        )
-        return live
-
-    # -------------------------------------------------------------------------
-    # Simple loop runner
-    # -------------------------------------------------------------------------
-
-    def run(
-        self,
-        tick: Optional[TickFn] = None,
-        *,
-        on_start: Optional[Callable[["FramedApp"], None]] = None,
-        on_stop: Optional[Callable[["FramedApp"], None]] = None,
-    ) -> None:
-        """
-        Run a simple Live loop.
-
-        Args:
-            tick:
-                Callback called in a loop. Receives the app instance.
-                Return False to stop, True (or None) to continue.
-            on_start:
-                Optional callback run once before the loop.
-            on_stop:
-                Optional callback run once after the loop exits.
-        """
-        if tick is None:
-            # If no tick, just render one frame and exit.
-            with self.create_live():
-                self._apply_state_to_layout()
+    def _update_layout(self) -> None:
+        """Update header, body and footer panels based on current state."""
+        if not self._layout:
             return
 
-        try:
-            if on_start is not None:
-                on_start(self)
+        # Header: title + caption
+        title_text = Text(
+            self.metadata.get("title", ""),
+            style=style(self.color_token, bold=True),
+        )
+        caption_text = Text(
+            self.metadata.get("caption", ""),
+            style=style("text.secondary"),
+        )
 
-            with self.create_live():
-                while True:
-                    self._apply_state_to_layout()
-                    result = tick(self)
-                    if result is False:
-                        break
+        header_content = Group(
+            Align.center(title_text),
+            Align.center(caption_text),
+        )
 
-        except KeyboardInterrupt:
-            # Graceful exit on Ctrl+C
-            pass
-        finally:
-            if on_stop is not None:
-                on_stop(self)
+        self._layout["header"].update(
+            Panel(
+                header_content,
+                border_style=style(self.color_token),
+                padding=(1, 2),
+                style=style("frame.bg"),
+            )
+        )
+
+        # Body: visible lines from scrollable body
+        visible_lines = self.body.get_visible_lines(self.viewport_height)
+        body_group = Group(*visible_lines)
+
+        self._layout["body"].update(
+            Panel(
+                body_group,
+                border_style=style("frame.chrome"),
+                padding=(1, 2),
+                style=style("frame.bg"),
+            )
+        )
+
+        # Footer: footer text + optional scroll indicator
+        scroll_indicator = self.body.get_scroll_indicator(self.viewport_height)
+
+        if self.footer_text:
+            if isinstance(self.footer_text, str):
+                footer_content: RenderableType = Text.from_markup(
+                    str(self.footer_text)
+                )
+            else:
+                footer_content = self.footer_text
+        else:
+            footer_content = Text(
+                "Press Ctrl+C to exit", style=style("text.muted")
+            )
+
+        if scroll_indicator and isinstance(footer_content, Text):
+            footer_with_scroll = Text()
+            footer_with_scroll.append_text(footer_content)
+            footer_with_scroll.append(
+                scroll_indicator, style=style("text.muted")
+            )
+            footer_content = footer_with_scroll
+
+        self._layout["footer"].update(
+            Panel(
+                Align.center(footer_content),
+                border_style=style("frame.chrome"),
+                padding=(0, 2),
+                style=style("frame.bg", dim=True),
+            )
+        )
+
+    # -------------------------------------------------------------------------
+    # Context manager + runtime
+    # -------------------------------------------------------------------------
+
+    def run(self) -> "FramedApp":
+        """
+        Simple helper to make:
+
+            with FramedApp("chat").run() as app:
+                ...
+
+        feel natural. Returns self.
+        """
+        return self
+
+    def __enter__(self) -> "FramedApp":
+        self._layout = self._build_layout()
+        self._update_layout()
+
+        self._live = Live(
+            self._layout,
+            console=self.console,
+            screen=True,
+            auto_refresh=False,
+            refresh_per_second=self.refresh_rate,
+        )
+        self._live.__enter__()
+
+        self._running = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._running = False
+        if self._live:
+            self._live.__exit__(exc_type, exc_val, exc_tb)
+            self._live = None
+
+    def refresh(self) -> None:
+        """Rebuild panels and trigger a Live refresh if running."""
+        if not self._running or not self._live:
+            return
+        self._update_layout()
+        self._live.refresh()
+
+    # -------------------------------------------------------------------------
+    # Scroll controls (delegate to body + refresh)
+    # -------------------------------------------------------------------------
+
+    def scroll_up(self, amount: int = 3) -> None:
+        """Scroll body up by N lines and refresh."""
+        self.body.scroll_up(amount=amount)
+        self.refresh()
+
+    def scroll_down(self, amount: int = 3) -> None:
+        """Scroll body down by N lines and refresh."""
+        self.body.scroll_down(amount=amount, viewport_height=self.viewport_height)
+        self.refresh()
+
+    def scroll_to_bottom(self) -> None:
+        """Scroll directly to bottom and refresh."""
+        self.body.scroll_to_bottom(viewport_height=self.viewport_height)
+        self.refresh()
