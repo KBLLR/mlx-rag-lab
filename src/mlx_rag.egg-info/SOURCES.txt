@@ -34,6 +34,8 @@ src/rag/cli/flux_txt2image.py
 src/rag/cli/generate_music.py
 src/rag/cli/interactive_rag.py
 src/rag/cli/utils.py
+src/rag/config/__init__.py
+src/rag/config/settings.py
 src/rag/ingestion/__init__.py
 src/rag/ingestion/create_vdb.py
 src/rag/models/__init__.py
