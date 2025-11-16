@@ -9,13 +9,16 @@ This module provides the main FastAPI application instance with:
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from rag.api.exceptions import RagException
+from rag.api.routes import rag
 from rag.api.schemas import HealthResponse
+from rag.models.model import Model
 
 # Configure structured logging
 logging.basicConfig(
@@ -24,13 +27,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global model instance (loaded at startup)
+_embedding_model: Optional[Model] = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
+    global _embedding_model
+
     logger.info("Starting MLX RAG Engine API (Tier 3B)")
+
+    # Initialize embedding model
+    try:
+        logger.info("Loading embedding model...")
+        _embedding_model = Model()
+        logger.info(f"Embedding model loaded: {_embedding_model.model_id}")
+    except Exception as e:
+        logger.error(f"Failed to load embedding model: {e}")
+        _embedding_model = None
+
     yield
+
     logger.info("Shutting down MLX RAG Engine API")
+    _embedding_model = None
 
 
 # Create FastAPI application instance
@@ -49,6 +69,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(rag.router, tags=["RAG"])
 
 
 # Exception Handlers
@@ -116,12 +139,14 @@ async def health_check():
     """
     logger.debug("Health check requested")
 
-    # TODO: Add actual model loading check in Phase 1 Task (P1-1)
+    models_loaded = _embedding_model is not None
+    embedding_model = _embedding_model.model_id if _embedding_model else None
+
     return HealthResponse(
         status="ok",
         tier="3B",
-        models_loaded=False,  # Placeholder until Model class is implemented
-        embedding_model=None,  # Will be populated when Model is implemented
+        models_loaded=models_loaded,
+        embedding_model=embedding_model,
     )
 
 
