@@ -1,10 +1,17 @@
-import mlx.core as mx
-import numpy as np
-import json  # Added json import
-from pathlib import Path  # Added Path import
+import json
+from pathlib import Path
+from typing import List, Optional, Dict, Tuple
+
+try:
+    import mlx.core as mx
+    MLX_AVAILABLE = True
+except ImportError:
+    MLX_AVAILABLE = False
+    import numpy as np
+
+import numpy as np  # Always import numpy for fallback
+
 from rag.models.model import Model
-from typing import List, Optional, Dict
-from unstructured.partition.pdf import partition_pdf
 
 CHUNK_SIZE = 256
 CHUNK_OVERLAP = 50
@@ -40,21 +47,33 @@ def split_text_into_chunks(text, chunk_size, overlap):
 # takes as an input a list of strings
 # the first output element is the data as a flatten array
 # the second output element is the length of each string in the list
-def chunks_to_mx_array(chunks: List[str]) -> (mx.array, mx.array):
+def chunks_to_mx_array(chunks: List[str]) -> Tuple:
     data = [ord(char) for string in chunks for char in string]
     lengths = [len(string) for string in chunks]
-    return (mx.array(data), mx.array(lengths))
+    if MLX_AVAILABLE:
+        return (mx.array(data), mx.array(lengths))
+    else:
+        return (np.array(data), np.array(lengths))
 
 
 # This is doing the reverse operation of chunks_to_mx_array
-def mx_array_to_chunks(data: mx.array, lengths: mx.array) -> List[str]:
+def mx_array_to_chunks(data, lengths) -> List[str]:
     i = 0
     output = []
     for l in lengths:
-        j = l.item() + i
-        x = [chr(d.item()) for d in data[i:j]]
+        if hasattr(l, 'item'):
+            l_val = l.item()
+        else:
+            l_val = int(l)
+        j = l_val + i
+        x = []
+        for d in data[i:j]:
+            if hasattr(d, 'item'):
+                x.append(chr(d.item()))
+            else:
+                x.append(chr(int(d)))
         output.append("".join(x))
-        i = l.item()
+        i = l_val
     return output
 
 
@@ -68,7 +87,10 @@ class VectorDB:
             try:
                 vdb_path = Path(vdb_file)
                 if vdb_path.exists():
-                    vdb = mx.load(vdb_file)
+                    if MLX_AVAILABLE:
+                        vdb = mx.load(vdb_file)
+                    else:
+                        vdb = np.load(vdb_file)
                     self.embeddings = vdb["embeddings"]
                     # Reconstruct content from separate text and source arrays
                     texts = mx_array_to_chunks(vdb["chunk_data"], vdb["chunk_lengths"])
@@ -90,7 +112,10 @@ class VectorDB:
         if self.embeddings is None:
             self.embeddings = new_embeddings
         else:
-            self.embeddings = mx.concatenate([self.embeddings, new_embeddings])
+            if MLX_AVAILABLE:
+                self.embeddings = mx.concatenate([self.embeddings, new_embeddings])
+            else:
+                self.embeddings = np.concatenate([self.embeddings, new_embeddings])
 
         for chunk in chunks:
             self.content.append({"text": chunk, "source": document_name})
@@ -99,10 +124,16 @@ class VectorDB:
         if self.embeddings is None:
             return []
         query_emb = self.model.run(text)
-        scores = mx.matmul(query_emb, self.embeddings.T) * 100
-        sorted_indices = mx.argsort(scores, axis=1)
-        top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
-        
+
+        if MLX_AVAILABLE:
+            scores = mx.matmul(query_emb, self.embeddings.T) * 100
+            sorted_indices = mx.argsort(scores, axis=1)
+            top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
+        else:
+            scores = np.matmul(query_emb, self.embeddings.T) * 100
+            sorted_indices = np.argsort(scores, axis=1)
+            top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
+
         # Return the list of content dictionaries
         responses = [self.content[i] for i in top_k_indices]
         return responses
@@ -121,14 +152,24 @@ class VectorDB:
         chunk_data, chunk_lengths = chunks_to_mx_array(texts)
         source_data, source_lengths = chunks_to_mx_array(sources)
 
-        mx.savez(
-            str(target),
-            embeddings=self.embeddings,
-            chunk_data=chunk_data,
-            chunk_lengths=chunk_lengths,
-            source_data=source_data,
-            source_lengths=source_lengths,
-        )
+        if MLX_AVAILABLE:
+            mx.savez(
+                str(target),
+                embeddings=self.embeddings,
+                chunk_data=chunk_data,
+                chunk_lengths=chunk_lengths,
+                source_data=source_data,
+                source_lengths=source_lengths,
+            )
+        else:
+            np.savez(
+                str(target),
+                embeddings=self.embeddings,
+                chunk_data=chunk_data,
+                chunk_lengths=chunk_lengths,
+                source_data=source_data,
+                source_lengths=source_lengths,
+            )
 
 
 def vdb_from_pdf(pdf_file: str) -> VectorDB:
