@@ -22,6 +22,10 @@ def _text_to_vector(text: str) -> list[float]:
 class _StubModel:
     """Deterministic embedding stub so tests do not hit HuggingFace downloads."""
 
+    def __init__(self):
+        self.model_id = "deterministic-stub"
+        self.embedding_dim = 4
+
     def run(self, input_text: str | Sequence[str]) -> mx.array:
         texts: Iterable[str]
         if isinstance(input_text, str):
@@ -34,8 +38,12 @@ class _StubModel:
 
 @pytest.fixture(autouse=True)
 def stub_embedding_model(monkeypatch):
-    """Patch rag.retrieval.vdb.Model with a deterministic stub for tests."""
-    import rag.retrieval.vdb as vdb_module
+    """Patch load_embedding_model to return a deterministic stub for tests."""
+    import rag.retrieval.embedding as embedding_module
 
-    monkeypatch.setattr(vdb_module, "Model", _StubModel)
+    # Replace load_embedding_model to always return the stub
+    def _load_stub():
+        return _StubModel()
+
+    monkeypatch.setattr(embedding_module, "load_embedding_model", _load_stub)
     yield

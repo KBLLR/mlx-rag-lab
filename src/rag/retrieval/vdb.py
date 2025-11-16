@@ -11,7 +11,7 @@ except ImportError:
 
 import numpy as np  # Always import numpy for fallback
 
-from rag.models.model import Model
+from rag.retrieval.embedding import load_embedding_model
 
 CHUNK_SIZE = 256
 CHUNK_OVERLAP = 50
@@ -79,7 +79,7 @@ def mx_array_to_chunks(data, lengths) -> List[str]:
 
 class VectorDB:
     def __init__(self, vdb_file: Optional[str] = None) -> None:
-        self.model = Model()
+        self.model = load_embedding_model()
         self.embeddings = None
         self.content = []  # Now a list of dicts: [{"text": chunk, "source": doc_name}, ...]
 
