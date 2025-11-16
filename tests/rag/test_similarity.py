@@ -178,3 +178,38 @@ def test_score_with_stub_model_embeddings():
     # Different text should have different embeddings → score < 1.0
     score_different = vdb.score(emb1[0], emb3[0])
     assert score_different < 1.0, f"Expected score < 1.0 for different text, got {score_different}"
+
+
+def test_query_with_large_k():
+    """Test that query handles k larger than available results."""
+    vdb = VectorDB()
+
+    # Ingest only 2 documents
+    vdb.ingest("First document about AI.", "doc1.txt")
+    vdb.ingest("Second document about ML.", "doc2.txt")
+
+    # Query with k=100 (much larger than available documents)
+    results = vdb.query("artificial intelligence", k=100)
+
+    # Should return at most the number of documents we have
+    assert len(results) <= 2, f"Expected at most 2 results, got {len(results)}"
+    assert len(results) > 0, "Expected at least some results"
+
+
+def test_query_returns_scores_in_valid_range():
+    """Test that all returned scores are in valid cosine similarity range [-1, 1]."""
+    vdb = VectorDB()
+
+    # Ingest diverse documents
+    vdb.ingest("Machine learning is a field of AI.", "doc1.txt")
+    vdb.ingest("Python is a programming language.", "doc2.txt")
+    vdb.ingest("The quick brown fox jumps.", "doc3.txt")
+
+    # Query
+    results = vdb.query("artificial intelligence", k=10)
+
+    # All scores should be in [-1, 1]
+    for result in results:
+        score = result.get("score", 0.0)
+        assert -1.0 <= score <= 1.0, f"Score {score} outside valid range [-1, 1]"
+        assert isinstance(score, float), f"Score should be float, got {type(score)}"
