@@ -16,6 +16,7 @@ dependencies = [
   "transformers~=4.57.1", # tokenizers + model configs (BERT, etc.)  [oai_citation:6‡PyPI](https://pypi.org/project/transformers/?utm_source=chatgpt.com)
   "unstructured[pdf]~=0.18.15", # PDF partitioning for ingestion
   "pydantic~=2.12.3", # config / validation layer
+  "pydantic-settings~=2.6.0", # Environment-based settings management
   "typer~=0.12.3", # CLI application framework
   "rich~=13.7.1", # Rich text and beautiful formatting in the terminal
   "numpy>=1.26",
@@ -39,6 +40,8 @@ dependencies = [
   "numba>=0.58", # JIT compilation for audio processing
   "scipy>=1.11", # Scientific computing for audio
   "InquirerPy>=0.3.4", # Interactive CLI prompts for mlxlab
+  "fastapi>=0.115.0", # FastAPI framework for Tier 3B API
+  "uvicorn[standard]>=0.32.0", # ASGI server for FastAPI
 ]
 
 [project.scripts]
