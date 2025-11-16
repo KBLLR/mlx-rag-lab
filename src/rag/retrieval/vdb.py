@@ -120,19 +120,77 @@ class VectorDB:
         for chunk in chunks:
             self.content.append({"text": chunk, "source": document_name})
 
+    def score(self, query_vec, doc_vec) -> float:
+        """
+        Compute cosine similarity between query and document vectors.
+
+        Parameters:
+        - query_vec: Query embedding vector (mx.array or np.array, float32)
+        - doc_vec: Document embedding vector (mx.array or np.array, float32)
+
+        Returns:
+        - float: Cosine similarity score in range [-1, 1]
+        """
+        if MLX_AVAILABLE:
+            # Ensure vectors are float32
+            query_vec = query_vec.astype(mx.float32)
+            doc_vec = doc_vec.astype(mx.float32)
+
+            # Compute cosine similarity: dot(a,b) / (||a|| * ||b|| + epsilon)
+            dot_product = mx.dot(query_vec, doc_vec)
+            query_norm = mx.linalg.norm(query_vec)
+            doc_norm = mx.linalg.norm(doc_vec)
+
+            # Add epsilon to avoid division by zero
+            epsilon = 1e-8
+            similarity = dot_product / (query_norm * doc_norm + epsilon)
+
+            # Return as Python float
+            return float(similarity.item())
+        else:
+            # Numpy fallback
+            query_vec = query_vec.astype(np.float32)
+            doc_vec = doc_vec.astype(np.float32)
+
+            dot_product = np.dot(query_vec, doc_vec)
+            query_norm = np.linalg.norm(query_vec)
+            doc_norm = np.linalg.norm(doc_vec)
+
+            epsilon = 1e-8
+            similarity = dot_product / (query_norm * doc_norm + epsilon)
+
+            return float(similarity)
+
     def query(self, text: str, k: int = 3) -> List[Dict[str, str]]:
         if self.embeddings is None:
             return []
         query_emb = self.model.run(text)
 
+        # Compute cosine similarity scores for all documents
+        scores = []
         if MLX_AVAILABLE:
-            scores = mx.matmul(query_emb, self.embeddings.T) * 100
-            sorted_indices = mx.argsort(scores, axis=1)
-            top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
+            query_vec = query_emb[0]  # Extract first row (single query)
+            for i in range(self.embeddings.shape[0]):
+                doc_vec = self.embeddings[i]
+                score = self.score(query_vec, doc_vec)
+                scores.append(score)
         else:
-            scores = np.matmul(query_emb, self.embeddings.T) * 100
-            sorted_indices = np.argsort(scores, axis=1)
-            top_k_indices = sorted_indices[:, ::-1][:, :k].flatten().tolist()
+            # Fallback for non-MLX (using numpy)
+            query_vec = query_emb[0]
+            for i in range(self.embeddings.shape[0]):
+                doc_vec = self.embeddings[i]
+                # Compute cosine similarity using numpy
+                dot_product = np.dot(query_vec, doc_vec)
+                query_norm = np.linalg.norm(query_vec)
+                doc_norm = np.linalg.norm(doc_vec)
+                score = dot_product / (query_norm * doc_norm + 1e-8)
+                scores.append(float(score))
+
+        # Sort indices by score in descending order (most similar first)
+        sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+
+        # Get top k results
+        top_k_indices = sorted_indices[:k]
 
         # Return the list of content dictionaries
         responses = [self.content[i] for i in top_k_indices]

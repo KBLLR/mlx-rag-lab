@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-import mlx.core as mx
 import pytest
+
+try:
+    import mlx.core as mx
+    MLX_AVAILABLE = True
+except (ImportError, OSError):
+    # MLX not available or shared library missing - use numpy fallback
+    import numpy as np
+    MLX_AVAILABLE = False
 
 
 def _text_to_vector(text: str) -> list[float]:
@@ -22,14 +29,17 @@ def _text_to_vector(text: str) -> list[float]:
 class _StubModel:
     """Deterministic embedding stub so tests do not hit HuggingFace downloads."""
 
-    def run(self, input_text: str | Sequence[str]) -> mx.array:
+    def run(self, input_text: str | Sequence[str]):
         texts: Iterable[str]
         if isinstance(input_text, str):
             texts = [input_text]
         else:
             texts = input_text
         vectors = [_text_to_vector(t) for t in texts]
-        return mx.array(vectors, dtype=mx.float32)
+        if MLX_AVAILABLE:
+            return mx.array(vectors, dtype=mx.float32)
+        else:
+            return np.array(vectors, dtype=np.float32)
 
 
 @pytest.fixture(autouse=True)
