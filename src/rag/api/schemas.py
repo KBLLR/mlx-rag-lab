@@ -67,6 +67,9 @@ class QueryRequest(BaseModel):
     threshold: Optional[float] = Field(
         0.5, description="Minimum similarity threshold (0-1)", ge=0.0, le=1.0
     )
+    filter: Optional[Dict[str, str]] = Field(
+        None, description="Metadata filter criteria (AND logic for multiple keys)", example={"author": "alice", "category": "physics"}
+    )
 
 
 class QueryResponse(BaseModel):

@@ -86,18 +86,16 @@ async def query(
         index_path = _get_index_path(request.collection)
         vdb = VectorDB(str(index_path))
 
-        # Perform the query
-        results = vdb.query(request.query, k=request.k)
+        # Perform the query with optional metadata filter
+        results = vdb.query(request.query, k=request.k, metadata_filter=request.filter)
 
         # Filter by threshold if specified
         if request.threshold is not None:
-            # Note: VectorDB returns scores as similarity * 100
-            # We need to normalize and filter
             filtered_results = []
             for result in results:
-                # Assuming the score is already computed by VectorDB
-                # In a real implementation, we'd normalize the score properly
-                filtered_results.append(result)
+                # VectorDB now returns scores in the result dict
+                if result.get("score", 0.0) >= request.threshold:
+                    filtered_results.append(result)
             results = filtered_results
 
         # Convert to response format
@@ -105,7 +103,7 @@ async def query(
             ChunkResult(
                 text=r["text"],
                 source=r["source"],
-                score=0.0,  # TODO: Compute actual similarity score
+                score=r.get("score", 0.0),  # Use actual similarity score from VectorDB
                 metadata=r.get("metadata"),
             )
             for r in results
@@ -182,8 +180,8 @@ async def upsert(
             # Count chunks before ingestion
             chunks_before = len(vdb.content) if vdb.content else 0
 
-            # Ingest the document
-            vdb.ingest(doc.content, doc.source)
+            # Ingest the document with metadata
+            vdb.ingest(doc.content, doc.source, doc.metadata)
 
             # Count chunks after ingestion
             chunks_after = len(vdb.content) if vdb.content else 0
