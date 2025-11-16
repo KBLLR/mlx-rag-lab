@@ -228,7 +228,8 @@ async def delete(
 
     Raises:
         404: Collection does not exist
-        501: Not implemented (placeholder)
+        400: Invalid filter criteria
+        500: Delete operation failed
     """
     logger.info(
         f"Delete request for collection '{request.collection}' "
@@ -240,13 +241,38 @@ async def delete(
     if not _collection_exists(request.collection):
         raise IndexNotFoundError(f"Collection '{request.collection}' does not exist")
 
-    # TODO: Implement deletion logic
-    # For now, return a not implemented error
-    raise HTTPException(
-        status_code=501,
-        detail="Delete operation not yet implemented. "
-        "This will be available in a future update.",
-    )
+    # Validate filter criteria
+    if not request.filter:
+        raise InvalidRequestError("Filter criteria cannot be empty")
+
+    try:
+        # Load the vector DB
+        index_path = _get_index_path(request.collection)
+        vdb = VectorDB(str(index_path))
+
+        # Perform deletion
+        deleted_count = vdb.delete(request.filter)
+
+        # Persist changes if any deletions occurred
+        if deleted_count > 0:
+            vdb.savez(str(index_path))
+
+        logger.info(
+            f"Deleted {deleted_count} chunks from collection '{request.collection}' "
+            f"[request_id={x_request_id}]"
+        )
+
+        return DeleteResponse(
+            deleted_count=deleted_count,
+            collection=request.collection,
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Delete failed for collection '{request.collection}': {e} "
+            f"[request_id={x_request_id}]"
+        )
+        raise HTTPException(status_code=500, detail=f"Delete operation failed: {str(e)}")
 
 
 @router.get("/stats", response_model=StatsResponse, tags=["RAG"])

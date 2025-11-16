@@ -138,6 +138,57 @@ class VectorDB:
         responses = [self.content[i] for i in top_k_indices]
         return responses
 
+    def delete(self, filter_criteria: Dict[str, str]) -> int:
+        """
+        Delete chunks that match ALL filter criteria.
+
+        Parameters:
+        - filter_criteria (Dict[str, str]): Dictionary of field:value pairs to match.
+          All criteria must match for a chunk to be deleted.
+
+        Returns:
+        - int: Number of chunks deleted.
+        """
+        if not filter_criteria:
+            return 0
+
+        if self.embeddings is None or not self.content:
+            return 0
+
+        # Find indices to keep (inverse of indices to delete)
+        indices_to_keep = []
+        for i, chunk_dict in enumerate(self.content):
+            # Check if this chunk matches ALL filter criteria
+            matches = all(
+                chunk_dict.get(key) == value for key, value in filter_criteria.items()
+            )
+            if not matches:
+                indices_to_keep.append(i)
+
+        deleted_count = len(self.content) - len(indices_to_keep)
+
+        if deleted_count == 0:
+            return 0
+
+        # Update content list
+        self.content = [self.content[i] for i in indices_to_keep]
+
+        # Update embeddings array
+        if MLX_AVAILABLE:
+            if indices_to_keep:
+                self.embeddings = self.embeddings[mx.array(indices_to_keep)]
+            else:
+                # All chunks deleted
+                self.embeddings = None
+        else:
+            if indices_to_keep:
+                self.embeddings = self.embeddings[indices_to_keep]
+            else:
+                # All chunks deleted
+                self.embeddings = None
+
+        return deleted_count
+
     def savez(self, vdb_file) -> None:
         target = Path(vdb_file)
         target.parent.mkdir(parents=True, exist_ok=True)
