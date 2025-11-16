@@ -496,3 +496,274 @@ uv run mlxlab
 - Prompt ingestion uses `examples/musicgen/prompts-models.txt`; keep that curated file updated and run `musicgen-cli --download-prompts` whenever the prompts change so mlxlab picks them up.
 - Dataset generator now exposes `generate_qa_dataset(config, pdf_paths)` for future automation scripts or notebooks; mlxlab reuses that entry point.
 ```
+
+---
+
+## [AVATAR_MLX_BRIDGE] STS Avatar → Avatar Debate Bridge (2025-11-16)
+
+**Agent Codename**: BridgeScout
+**Mission**: Review-only readiness assessment for exposing STS Avatar pipeline as a reusable service
+
+### Current STS Pipeline Entrypoint
+
+**CLI**: `apps/sts_avatar_cli.py` (line 1-746)
+- Entry: `uv run sts-avatar-cli` → `rag.cli.entrypoints:sts_avatar_cli_main`
+- Main class: `STSAvatarPipeline` (line 77-537)
+- Pipeline method: `process_audio_file(audio_path, stream_text) → (response_text, audio_path, viseme_json_path, transcription)` (line 376-404)
+
+**Module Structure**:
+```
+src/rag/
+├── tts/
+│   ├── kokoro_tts.py        # KokoroTTSClient (54 voices, 8 languages, phoneme output)
+│   ├── viseme_mapper.py     # VisemeMapper (IPA → Oculus viseme IDs)
+│   └── marvis_tts.py        # MarvisTTSClient (fallback, no visemes)
+├── chat/
+│   └── gpt_oss_wrapper.py   # ChatSession (GPT-OSS 20B with proper templates)
+├── stt/
+│   └── whisperx_client.py   # WhisperXClient (STT + diarization)
+└── examples/whisper/
+    └── mlx_whisper/          # Baseline Whisper MLX (no diarization)
+```
+
+### Output Layout (Per Response)
+
+**Base Directory**: `var/sts_avatar/response_YYYYMMDD_HHMMSS/`
+
+**Files Created**:
+- `audio.wav` — 24kHz WAV audio (Kokoro) or 22kHz (Marvis)
+- `visemes.json` — HeadTTS-compatible JSON (Kokoro only)
+- `response.txt` — Assistant's text response
+- `transcription.txt` — User's transcribed input
+- `speakers.json` — Diarization metadata (if `--diarize` enabled)
+- `transcription_speakers.txt` — Speaker-labeled transcript (if diarization enabled)
+
+**visemes.json Schema** (HeadTTS-compatible):
+```json
+{
+  "words": ["Hello ", "world"],
+  "wtimes": [0, 500],
+  "wdurations": [400, 600],
+  "visemes": ["sil", "kk", "E", "DD", "O"],
+  "vtimes": [0, 100, 200, 300, 400],
+  "vdurations": [100, 100, 100, 100, 200]
+}
+```
+
+**Oculus Viseme IDs** (14 total, Ready Player Me standard):
+- `sil` (silence), `PP` (bilabials), `FF` (labiodentals), `TH` (dental), `DD` (alveolar), `kk` (velar), `CH` (postalveolar), `SS` (sibilants), `nn` (nasal), `RR` (rhotic), `aa` (open vowels), `E` (mid front), `I` (close front), `O` (back rounded), `U` (close back)
+
+### Pipeline Flow
+
+```
+Audio File (user recording)
+    ↓
+Whisper MLX STT
+    - mlx-community/whisper-large-v3-mlx (default, ~3GB)
+    - Optional: WhisperX backend with speaker diarization
+    ↓
+ChatSession (GPT-OSS 20B)
+    - mlx-community/Jinx-gpt-oss-20b-mxfp4-mlx (~12GB MXFP4)
+    - Maintains conversation history
+    - Proper chat templates
+    ↓
+Kokoro TTS (or Marvis fallback)
+    - 54 voices across 8 languages
+    - 82M params (~350MB)
+    - Phoneme-level output (IPA)
+    ↓
+VisemeMapper
+    - IPA phonemes → Oculus viseme IDs
+    - Timing estimation (or HeadTTS microservice for phoneme-accurate timing)
+    ↓
+Outputs: audio.wav + visemes.json
+```
+
+### Readiness for Reuse by Avatar Debate
+
+**Verdict**: ⚠️ **PARTIAL** — Clean internal API exists but wrapped in CLI-only interface
+
+**What's Ready**:
+✅ **Modular components**: TTS, STT, Chat, Viseme mapping are separate, reusable modules
+✅ **Clean pipeline API**: `STSAvatarPipeline.process_audio_file()` is a well-defined method (line 376-404)
+✅ **Standardized output**: HeadTTS-compatible viseme JSON works with Ready Player Me / Three.js
+✅ **Model flexibility**: Supports multiple TTS engines (Kokoro/Marvis), Whisper models, chat models
+✅ **Diarization support**: Optional multi-speaker detection with voice assignment (WhisperX backend)
+✅ **Documentation**: Comprehensive `docs/STS_AVATAR_PIPELINE.md` (592 lines)
+
+**What's NOT Ready**:
+❌ **CLI coupling**: `STSAvatarPipeline` class mixes business logic with CLI UX (console.print, interactive prompts)
+❌ **Hardcoded paths**: Assumes `var/sts_avatar/` relative to project root; not configurable for service mode
+❌ **No API wrapper**: No FastAPI/HTTP endpoint exists; CLI is the only interface
+❌ **Model reload overhead**: Each CLI invocation reloads GPT-OSS (~12GB) + Whisper (~3GB) + Kokoro (~350MB)
+❌ **No singleton/cache**: No model caching for multi-request scenarios (critical for API service)
+
+### Blockers
+
+1. **CLI-specific concerns in business logic**:
+   - `STSAvatarPipeline` uses `rich.console` for output (lines 30, 158-173, 193-232, 305-313)
+   - Interactive mode with user input loops (line 442-536)
+   - File listing and numbered selection UI (line 406-440)
+   - Not suitable for direct reuse in headless service
+
+2. **Path assumptions**:
+   - Output dir defaults to `var/sts_avatar` relative path (line 131-135)
+   - Audio file discovery assumes `var/source_audios/` (line 406-414)
+   - Works fine for CLI, breaks for service deployed elsewhere
+
+3. **Model lifecycle**:
+   - Models loaded in `__init__` (line 158-179)
+   - No singleton pattern for model reuse across requests
+   - Each `STSAvatarPipeline()` instance reloads ~15GB of models
+   - For API: need singleton model manager to avoid cold starts
+
+4. **No API contract**:
+   - No FastAPI/HTTP wrapper exists
+   - No OpenAPI schema or endpoint definitions
+   - Would need to create from scratch
+
+### Suggested Minimal Extraction Path (DO NOT IMPLEMENT — DESIGN ONLY)
+
+**Stage 0: Extract core logic (non-destructive)**
+- Create `src/rag/sts/core.py` with:
+  - `STSCore` class (no CLI dependencies, pure business logic)
+  - Method: `process_audio(audio_bytes, config) → STSResult`
+  - Dataclass: `STSResult(audio_bytes, viseme_dict, response_text, transcription)`
+- Existing `apps/sts_avatar_cli.py` refactors to use `STSCore` internally
+- Zero disruption to CLI users
+
+**Stage 1: Singleton model manager**
+- Create `src/rag/sts/model_manager.py`:
+  - `STSModelManager` singleton with lazy loading
+  - Methods: `get_chat_model()`, `get_tts_client()`, `get_whisper_model()`
+  - Shared across requests; models loaded once per process
+- `STSCore` uses `STSModelManager` instead of self-owned models
+
+**Stage 2: FastAPI wrapper (optional)**
+- Create `apps/sts_avatar_api.py`:
+  - FastAPI app with `/api/v1/sts/avatar` endpoint
+  - Accepts: multipart/form-data audio file + config JSON
+  - Returns: JSON with audio URL + viseme data
+  - Model preloading on startup via `@app.on_event("startup")`
+- Example integration code for Avatar Debate (see `docs/STS_AVATAR_PIPELINE.md` line 314-346)
+
+**Stage 3: Configuration externalization**
+- Use environment variables or config file instead of CLI flags
+- Example: `STS_CHAT_MODEL`, `STS_TTS_ENGINE`, `STS_OUTPUT_DIR`
+- Allows deployment without code changes
+
+### Why NOT READY for Immediate Integration
+
+**Tight coupling**: The current implementation is optimized for CLI usage (interactive prompts, file browsing, console output). Exposing this directly as a service would:
+- Leak CLI-specific UX into API responses
+- Require callers to handle file paths instead of binary streams
+- Force model reloading on every request (15GB cold start)
+
+**Missing abstraction layer**: No separation between "STS business logic" and "CLI interface". The `STSAvatarPipeline` class does both.
+
+**Path brittleness**: Service deployment (Docker, systemd, lambda) would break due to hardcoded relative paths like `var/sts_avatar/`.
+
+### Recommended Next Steps (For Future Implementation Prompt)
+
+**DO NOT implement now** (per review-only constraint). For a future implementation session:
+
+1. **Validate assumptions** (1-2 hours):
+   - Confirm Avatar Debate's expected input/output format
+   - Decide: REST API, Python module import, or CLI wrapper?
+   - Confirm model hosting: same machine or separate service?
+
+2. **Create `src/rag/sts/core.py`** (2-3 hours):
+   - Extract pure business logic from `STSAvatarPipeline`
+   - Remove all `console.print`, file prompts, interactive logic
+   - Accept in-memory audio bytes instead of file paths
+   - Return structured `STSResult` dataclass
+
+3. **Refactor `apps/sts_avatar_cli.py`** (1-2 hours):
+   - Use new `STSCore` internally
+   - Keep CLI UX unchanged for existing users
+   - Prove non-destructive refactor via smoke test
+
+4. **Optional: FastAPI wrapper** (2-3 hours):
+   - If Avatar Debate needs HTTP API
+   - Create `apps/sts_avatar_api.py` with `/api/v1/sts/avatar` endpoint
+   - Model singleton for performance
+   - Return JSON response compatible with Avatar Debate frontend
+
+5. **Documentation** (1 hour):
+   - Update `docs/STS_AVATAR_PIPELINE.md` with API usage examples
+   - Add Python API examples (already partially documented at line 350-406)
+
+**Total Effort Estimate**: 6-11 hours for full API extraction + testing
+
+### Dependencies (All Already Installed)
+
+From `pyproject.toml`:
+- `kokoro>=0.9.2` — TTS with phoneme output
+- `whisperx @ git+https://github.com/sooth/whisperx-mlx.git` — STT + diarization
+- `torch>=2.5.1`, `torchaudio>=2.5.1` — PyTorch for Kokoro/WhisperX
+- `soundfile>=0.12.1` — Audio I/O
+- `mlx-lm` — GPT-OSS model loading
+- `transformers~=4.57.1` — Tokenizers
+- `fastapi>=0.115.0`, `uvicorn[standard]>=0.32.0` — Already installed for "Tier 3B API" (line 43-44)
+
+**No new dependencies required**. FastAPI/uvicorn already in project.
+
+### Key Insights
+
+1. **Pipeline is production-ready** at the component level:
+   - Kokoro TTS generates phoneme-accurate output
+   - VisemeMapper produces industry-standard Oculus viseme IDs
+   - WhisperX provides optional diarization
+   - GPT-OSS 20B runs locally on MLX (no cloud dependency)
+
+2. **CLI design is intentional and clean**:
+   - Not a "hacky script" — well-documented (592-line guide)
+   - Handoff entries show careful evolution (Avatar entry, line 349-430 in HANDOFFS.md)
+   - Used by developers for avatar prototyping
+
+3. **Extraction is straightforward**:
+   - Business logic is already isolated in `process_audio_file()` method
+   - Components (TTS, STT, Chat, Viseme) are modular
+   - Just needs a "core module" wrapper to decouple from CLI
+
+4. **Performance is viable for local service**:
+   - Typical latency: 4-10s per turn (M3 Max)
+   - Memory: ~15.5GB (fits M3 Max with 36GB unified memory)
+   - Model caching would make subsequent requests instant (no reload)
+
+5. **Three.js integration is already documented**:
+   - `docs/STS_AVATAR_PIPELINE.md` line 285-346
+   - Shows FastAPI endpoint example + TalkingHead frontend code
+   - Just needs implementation
+
+### Files Reviewed
+
+- `apps/sts_avatar_cli.py` (746 lines) — Main CLI + STSAvatarPipeline class
+- `src/rag/tts/kokoro_tts.py` (234 lines) — Kokoro TTS wrapper
+- `src/rag/tts/viseme_mapper.py` (286 lines) — Phoneme → viseme mapping
+- `src/rag/tts/marvis_tts.py` — Fallback TTS (not reviewed in detail)
+- `src/rag/chat/gpt_oss_wrapper.py` — ChatSession wrapper (referenced)
+- `src/rag/stt/whisperx_client.py` — WhisperX wrapper (referenced)
+- `docs/STS_AVATAR_PIPELINE.md` (592 lines) — Comprehensive usage guide
+- `pyproject.toml` — Dependencies and CLI entrypoints
+- `README.md` — Project overview
+
+### Conclusion
+
+**The STS avatar pipeline (Kokoro + visemes) is PARTIALLY READY** for Avatar Debate integration:
+
+✅ **Technically sound**: Components are modular, well-documented, production-grade
+✅ **Output format correct**: HeadTTS-compatible JSON works with Ready Player Me
+✅ **Dependencies satisfied**: All required packages already installed
+
+⚠️ **Architecturally coupled**: Needs extraction of core logic from CLI wrapper
+⚠️ **Model lifecycle**: Needs singleton pattern for API service performance
+⚠️ **Path configuration**: Needs environment-based config for deployment flexibility
+
+**This is NOT a fundamental blocker**. The work required is **refactoring, not reimplementation**. The core pipeline is ready; it just needs a service-oriented wrapper.
+
+**Next action** (for future prompt): Create `src/rag/sts/core.py` + optional `apps/sts_avatar_api.py` following the staged plan above. Estimated effort: 6-11 hours.
+
+---
+
+**End of [AVATAR_MLX_BRIDGE] Assessment**
