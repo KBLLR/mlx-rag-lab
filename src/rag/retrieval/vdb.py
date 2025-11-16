@@ -81,7 +81,7 @@ class VectorDB:
     def __init__(self, vdb_file: Optional[str] = None) -> None:
         self.model = Model()
         self.embeddings = None
-        self.content = []  # Now a list of dicts: [{"text": chunk, "source": doc_name}, ...]
+        self.content = []  # Now a list of dicts: [{"text": chunk, "source": doc_name, "metadata": {...}}, ...]
 
         if vdb_file:
             try:
@@ -95,14 +95,23 @@ class VectorDB:
                     # Reconstruct content from separate text and source arrays
                     texts = mx_array_to_chunks(vdb["chunk_data"], vdb["chunk_lengths"])
                     sources = mx_array_to_chunks(vdb["source_data"], vdb["source_lengths"])
-                    self.content = [{"text": t, "source": s} for t, s in zip(texts, sources)]
+
+                    # Load metadata if present (backward compatible)
+                    metadatas = []
+                    if "metadata_data" in vdb and "metadata_lengths" in vdb:
+                        metadata_strs = mx_array_to_chunks(vdb["metadata_data"], vdb["metadata_lengths"])
+                        metadatas = [json.loads(m) if m else {} for m in metadata_strs]
+                    else:
+                        metadatas = [{}] * len(texts)
+
+                    self.content = [{"text": t, "source": s, "metadata": m} for t, s, m in zip(texts, sources, metadatas)]
 
             except Exception as e:
                 print(f"[WARN] Could not load VDB from {vdb_file}: {e}")
                 self.embeddings = None
                 self.content = []
 
-    def ingest(self, content: str, document_name: str) -> None:
+    def ingest(self, content: str, document_name: str, metadata: Optional[Dict] = None) -> None:
         chunks = split_text_into_chunks(text=content, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
         if not chunks:
             return
@@ -117,8 +126,10 @@ class VectorDB:
             else:
                 self.embeddings = np.concatenate([self.embeddings, new_embeddings])
 
+        # Store metadata with each chunk (default to empty dict if not provided)
+        chunk_metadata = metadata if metadata is not None else {}
         for chunk in chunks:
-            self.content.append({"text": chunk, "source": document_name})
+            self.content.append({"text": chunk, "source": document_name, "metadata": chunk_metadata})
 
     def score(self, query_vec, doc_vec) -> float:
         """
@@ -161,39 +172,65 @@ class VectorDB:
 
             return float(similarity)
 
-    def query(self, text: str, k: int = 3) -> List[Dict[str, str]]:
+    def query(self, text: str, k: int = 3, metadata_filter: Optional[Dict[str, str]] = None) -> List[Dict]:
         if self.embeddings is None:
             return []
+
+        # Apply metadata filtering BEFORE scoring
+        if metadata_filter:
+            # Find indices that match the filter (AND logic for multiple criteria)
+            filtered_indices = []
+            for i, chunk_dict in enumerate(self.content):
+                chunk_metadata = chunk_dict.get("metadata", {})
+                # Check if ALL filter criteria match
+                matches = all(
+                    chunk_metadata.get(key) == value for key, value in metadata_filter.items()
+                )
+                if matches:
+                    filtered_indices.append(i)
+
+            # If no chunks match the filter, return empty results
+            if not filtered_indices:
+                return []
+        else:
+            # No filter - consider all chunks
+            filtered_indices = list(range(len(self.content)))
+
         query_emb = self.model.run(text)
 
-        # Compute cosine similarity scores for all documents
+        # Compute cosine similarity scores only for filtered documents
         scores = []
         if MLX_AVAILABLE:
             query_vec = query_emb[0]  # Extract first row (single query)
-            for i in range(self.embeddings.shape[0]):
+            for i in filtered_indices:
                 doc_vec = self.embeddings[i]
                 score = self.score(query_vec, doc_vec)
-                scores.append(score)
+                scores.append((i, score))
         else:
             # Fallback for non-MLX (using numpy)
             query_vec = query_emb[0]
-            for i in range(self.embeddings.shape[0]):
+            for i in filtered_indices:
                 doc_vec = self.embeddings[i]
                 # Compute cosine similarity using numpy
                 dot_product = np.dot(query_vec, doc_vec)
                 query_norm = np.linalg.norm(query_vec)
                 doc_norm = np.linalg.norm(doc_vec)
                 score = dot_product / (query_norm * doc_norm + 1e-8)
-                scores.append(float(score))
+                scores.append((i, float(score)))
 
-        # Sort indices by score in descending order (most similar first)
-        sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        # Sort by score in descending order (most similar first)
+        scores.sort(key=lambda x: x[1], reverse=True)
 
         # Get top k results
-        top_k_indices = sorted_indices[:k]
+        top_k = scores[:k]
 
-        # Return the list of content dictionaries
-        responses = [self.content[i] for i in top_k_indices]
+        # Return content dictionaries with scores
+        responses = []
+        for idx, score in top_k:
+            result = self.content[idx].copy()
+            result["score"] = score
+            responses.append(result)
+
         return responses
 
     def delete(self, filter_criteria: Dict[str, str]) -> int:
@@ -254,12 +291,15 @@ class VectorDB:
         if self.embeddings is None or not self.content:
             raise ValueError("VectorDB.savez called before embeddings/content were initialized.")
 
-        # Separate texts and sources for saving
+        # Separate texts, sources, and metadata for saving
         texts = [item["text"] for item in self.content]
         sources = [item["source"] for item in self.content]
+        # Serialize metadata as JSON strings
+        metadatas = [json.dumps(item.get("metadata", {})) for item in self.content]
 
         chunk_data, chunk_lengths = chunks_to_mx_array(texts)
         source_data, source_lengths = chunks_to_mx_array(sources)
+        metadata_data, metadata_lengths = chunks_to_mx_array(metadatas)
 
         if MLX_AVAILABLE:
             mx.savez(
@@ -269,6 +309,8 @@ class VectorDB:
                 chunk_lengths=chunk_lengths,
                 source_data=source_data,
                 source_lengths=source_lengths,
+                metadata_data=metadata_data,
+                metadata_lengths=metadata_lengths,
             )
         else:
             np.savez(
@@ -278,6 +320,8 @@ class VectorDB:
                 chunk_lengths=chunk_lengths,
                 source_data=source_data,
                 source_lengths=source_lengths,
+                metadata_data=metadata_data,
+                metadata_lengths=metadata_lengths,
             )
 
 
