@@ -58,7 +58,7 @@ uv run pytest tests/rag/test_stats_api.py -v         # Stats endpoint tests
 **Run the RAG API server (for manual testing):**
 ```bash
 # Start the FastAPI server
-uv run uvicorn rag.api.main:app --reload
+uv run uvicorn rag.api.main:app --reload --port 8000
 
 # In another terminal, test endpoints
 curl http://localhost:8000/health
@@ -66,9 +66,55 @@ curl http://localhost:8000/docs  # OpenAPI documentation
 ```
 
 **Contract validation:**
-- All endpoints match the documented API contract in `docs/API_CONTRACT.md`
+- All endpoints follow the **Phase-4 contract** (see `docs/PHASE4_PROVIDER_CONTRACT.md`)
 - Request/response schemas are validated via Pydantic models
 - Tests cover edge cases: empty filters, large k values, threshold filtering, etc.
+- All responses include `latency_ms` and support `X-Request-ID` header for tracing
+
+---
+
+## Phase-4 Integration (Tier-2 Orchestrator)
+
+This RAG engine is designed as **Tier-3B** in a 3-tier fusion architecture:
+
+```
+Tier-2: gen-idea-lab (Orchestrator)
+  ├─ Tier-3A: mlx-openai-server-lab (MLX LLM)
+  └─ Tier-3B: mlx-rag-lab (RAG Engine) ← You are here
+```
+
+**Phase-4 Features:**
+- ✅ Health endpoint with `{ ok, latency_ms }` contract
+- ✅ Request ID tracing (`X-Request-ID` header)
+- ✅ Latency measurement on all operations
+- ✅ RAG query with k/threshold/metadata filtering
+- ✅ Deterministic chunking (256 chars, 50 overlap)
+- ✅ Cosine similarity with L2-normalized embeddings
+
+**Integration Docs:**
+- `docs/PHASE4_PROVIDER_CONTRACT.md` - Complete API specification
+- `docs/PHASE4_SERVICE_TOPOLOGY.md` - 3-tier architecture overview
+- `docs/PHASE4_INTEGRATION_EXAMPLES.md` - TypeScript/Python examples
+- `_report/phase4-rag-readiness.md` - Readiness assessment
+
+**Quick Start for Tier-2 Integration:**
+```typescript
+// In gen-idea-lab (Tier-2)
+import { getRAGProvider } from './providers/rag-provider';
+
+const rag = getRAGProvider('http://localhost:8000');
+
+// Query with request tracing
+const response = await rag.query(
+  'What is MLX?',
+  'mlx_docs',
+  'request-123',
+  5,  // k
+  0.5 // threshold
+);
+
+console.log(`Found ${response.results.length} results in ${response.latency_ms}ms`);
+```
 
 ---
 

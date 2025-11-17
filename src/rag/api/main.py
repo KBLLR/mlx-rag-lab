@@ -129,17 +129,21 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check(x_request_id: Optional[str] = Header(None, alias="X-Request-ID")):
-    """Health check endpoint.
+    """Health check endpoint (Phase-4 contract).
 
     Returns the current status of the RAG engine, including whether
     embedding models are loaded and ready to process requests.
 
     Returns:
-        HealthResponse: Health status with model loading state
+        HealthResponse: Health status with model loading state and latency
     """
+    import time
     import uuid
     from pathlib import Path
     from rag.config.settings import get_settings
+
+    # Start latency measurement
+    start_time = time.perf_counter()
 
     # Generate request_id if not provided
     request_id = x_request_id or str(uuid.uuid4())
@@ -162,15 +166,15 @@ async def health_check(x_request_id: Optional[str] = Header(None, alias="X-Reque
         logger.warning(f"Index storage not accessible: {e}")
         index_available = False
 
-    # Determine overall status
-    status = "ok"
-    if not models_loaded:
-        status = "degraded"
-    if not index_available:
-        status = "error" if not models_loaded else "degraded"
+    # Determine overall status (ok = fully operational)
+    ok = models_loaded and index_available
+
+    # Measure latency
+    latency_ms = (time.perf_counter() - start_time) * 1000
 
     return HealthResponse(
-        status=status,
+        ok=ok,
+        latency_ms=latency_ms,
         tier="3B",
         models_loaded=models_loaded,
         embedding_model=embedding_model,
