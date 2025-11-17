@@ -173,6 +173,20 @@ class VectorDB:
             return float(similarity)
 
     def query(self, text: str, k: int = 3, metadata_filter: Optional[Dict[str, str]] = None) -> List[Dict]:
+        """Query the vector database for semantically similar chunks.
+
+        Parameters:
+        - text (str): Query text to search for
+        - k (int): Number of top results to return (default: 3)
+        - metadata_filter (Dict[str, str] | None): Optional metadata filter with AND logic
+
+        Returns:
+        - List[Dict]: List of result dictionaries with keys:
+            - text (str): Chunk content
+            - source (str): Source document identifier
+            - score (float): Cosine similarity in range [-1, 1] (higher is more similar)
+            - metadata (dict): Associated metadata
+        """
         if self.embeddings is None:
             return []
 
