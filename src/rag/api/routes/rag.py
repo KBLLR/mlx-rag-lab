@@ -1,6 +1,8 @@
 """RAG API route handlers for document ingestion, retrieval, and management."""
 
 import logging
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -50,7 +52,7 @@ def _collection_exists(collection: str) -> bool:
     return _get_index_path(collection).exists()
 
 
-@router.post("/query", response_model=QueryResponse, tags=["RAG"])
+@router.post("/rag_query", response_model=QueryResponse, tags=["RAG"])
 async def query(
     request: QueryRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -71,10 +73,13 @@ async def query(
         404: Collection does not exist
         500: Query execution failed
     """
+    # Generate request_id if not provided
+    request_id = x_request_id or str(uuid.uuid4())
+
     logger.info(
         f"Query request for collection '{request.collection}' "
         f"(k={request.k}, threshold={request.threshold}) "
-        f"[request_id={x_request_id}]"
+        f"[request_id={request_id}]"
     )
 
     # Check if collection exists
@@ -110,24 +115,25 @@ async def query(
         ]
 
         logger.info(
-            f"Query returned {len(chunk_results)} results [request_id={x_request_id}]"
+            f"Query returned {len(chunk_results)} results [request_id={request_id}]"
         )
 
         return QueryResponse(
             results=chunk_results,
             query=request.query,
             collection=request.collection,
+            request_id=request_id,
         )
 
     except Exception as e:
         logger.error(
             f"Query failed for collection '{request.collection}': {e} "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
         raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}")
 
 
-@router.post("/upsert", response_model=UpsertResponse, tags=["RAG"])
+@router.post("/rag_upsert", response_model=UpsertResponse, tags=["RAG"])
 async def upsert(
     request: UpsertRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -148,10 +154,13 @@ async def upsert(
         400: Invalid request (empty documents, etc.)
         500: Ingestion failed
     """
+    # Generate request_id if not provided
+    request_id = x_request_id or str(uuid.uuid4())
+
     logger.info(
         f"Upsert request for collection '{request.collection}' "
         f"with {len(request.documents)} documents "
-        f"[request_id={x_request_id}]"
+        f"[request_id={request_id}]"
     )
 
     if not request.documents:
@@ -173,7 +182,7 @@ async def upsert(
             if not doc.content.strip():
                 logger.warning(
                     f"Skipping empty document from source '{doc.source}' "
-                    f"[request_id={x_request_id}]"
+                    f"[request_id={request_id}]"
                 )
                 continue
 
@@ -188,29 +197,33 @@ async def upsert(
             total_chunks += chunks_after - chunks_before
 
         # Save the updated index
+        # Ensure parent directory exists
+        index_path.parent.mkdir(parents=True, exist_ok=True)
         vdb.savez(str(index_path))
 
         logger.info(
             f"Upserted {len(request.documents)} documents "
             f"({total_chunks} chunks) to collection '{request.collection}' "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
 
         return UpsertResponse(
             chunks_added=total_chunks,
             documents_processed=len(request.documents),
             collection=request.collection,
+            index_path=str(index_path),
+            request_id=request_id,
         )
 
     except Exception as e:
         logger.error(
             f"Upsert failed for collection '{request.collection}': {e} "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
         raise HTTPException(status_code=500, detail=f"Upsert failed: {str(e)}")
 
 
-@router.post("/delete", response_model=DeleteResponse, tags=["RAG"])
+@router.post("/rag_delete", response_model=DeleteResponse, tags=["RAG"])
 async def delete(
     request: DeleteRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -229,10 +242,13 @@ async def delete(
         400: Invalid filter criteria
         500: Delete operation failed
     """
+    # Generate request_id if not provided
+    request_id = x_request_id or str(uuid.uuid4())
+
     logger.info(
         f"Delete request for collection '{request.collection}' "
         f"with filter {request.filter} "
-        f"[request_id={x_request_id}]"
+        f"[request_id={request_id}]"
     )
 
     # Check if collection exists
@@ -257,23 +273,24 @@ async def delete(
 
         logger.info(
             f"Deleted {deleted_count} chunks from collection '{request.collection}' "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
 
         return DeleteResponse(
             deleted_count=deleted_count,
             collection=request.collection,
+            request_id=request_id,
         )
 
     except Exception as e:
         logger.error(
             f"Delete failed for collection '{request.collection}': {e} "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
         raise HTTPException(status_code=500, detail=f"Delete operation failed: {str(e)}")
 
 
-@router.get("/stats", response_model=StatsResponse, tags=["RAG"])
+@router.get("/rag_stats", response_model=StatsResponse, tags=["RAG"])
 async def stats(
     collection: str,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -291,8 +308,11 @@ async def stats(
         404: Collection does not exist
         500: Failed to read statistics
     """
+    # Generate request_id if not provided
+    request_id = x_request_id or str(uuid.uuid4())
+
     logger.info(
-        f"Stats request for collection '{collection}' " f"[request_id={x_request_id}]"
+        f"Stats request for collection '{collection}' " f"[request_id={request_id}]"
     )
 
     # Check if collection exists
@@ -321,10 +341,25 @@ async def stats(
             except Exception:
                 embedding_dim = None
 
+        # Get file timestamps
+        created_at = None
+        updated_at = None
+        if index_path.exists():
+            try:
+                stat = index_path.stat()
+                # Use modification time as updated_at
+                updated_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+                # Use creation time as created_at (or mtime if ctime not available)
+                created_at = datetime.fromtimestamp(
+                    getattr(stat, 'st_birthtime', stat.st_mtime), tz=timezone.utc
+                ).isoformat()
+            except Exception:
+                pass
+
         logger.info(
             f"Stats for collection '{collection}': "
             f"{num_chunks} chunks, {num_documents} documents "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
 
         return StatsResponse(
@@ -333,12 +368,16 @@ async def stats(
             num_documents=num_documents,
             embedding_model=vdb.model.model_id if hasattr(vdb.model, "model_id") else "unknown",
             embedding_dim=embedding_dim,
+            index_path=str(index_path),
+            created_at=created_at,
+            updated_at=updated_at,
+            request_id=request_id,
         )
 
     except Exception as e:
         logger.error(
             f"Failed to get stats for collection '{collection}': {e} "
-            f"[request_id={x_request_id}]"
+            f"[request_id={request_id}]"
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to read collection stats: {str(e)}"

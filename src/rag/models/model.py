@@ -1,9 +1,11 @@
 """Embedding model for RAG retrieval.
 
-This module provides a simple embedding model interface that can be
-used with or without MLX depending on the environment.
+This module provides a sentence-transformer-based embedding model
+using the transformers library with MLX array outputs.
 """
 
+import logging
+from pathlib import Path
 from typing import List, Sequence, Union
 
 try:
@@ -14,50 +16,60 @@ except ImportError:
     # Fallback to numpy for non-Apple platforms
     import numpy as np
 
+import torch
+from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerBase
 
-def _text_to_vector(text: str) -> List[float]:
-    """Generate deterministic embedding from text.
+logger = logging.getLogger(__name__)
 
-    This is a simple hash-based embedding for testing and development.
-    In production, this should be replaced with a real embedding model.
+
+def mean_pooling(token_embeddings: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    """Apply mean pooling to token embeddings.
 
     Args:
-        text: Input text to embed
+        token_embeddings: Token-level embeddings from the model
+        attention_mask: Attention mask to exclude padding tokens
 
     Returns:
-        4-dimensional embedding vector
+        Sentence-level embeddings
     """
-    if not text:
-        return [0.0, 0.0, 0.0, 0.0]
-
-    encoded = text.encode("utf-8")
-    length = len(text)
-    byte_sum = sum(encoded) % 997
-    vowels = sum(1 for c in text.lower() if c in "aeiou")
-    unique_tokens = len({token.strip(".,!?").lower() for token in text.split() if token})
-
-    return [float(length), float(byte_sum), float(vowels), float(unique_tokens or 1)]
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    return sum_embeddings / sum_mask
 
 
 class Model:
-    """Simple embedding model for RAG retrieval.
+    """Sentence-transformer-based embedding model for RAG retrieval.
 
-    This is a deterministic stub implementation that generates embeddings
-    based on text features. In production, this should be replaced with
-    a real embedding model (e.g., sentence-transformers via MLX).
+    This implementation uses transformers library with a sentence-transformers
+    compatible model to generate semantic embeddings. The outputs are returned
+    as MLX arrays for compatibility with the MLX-based vector database.
 
     The interface matches what VectorDB expects:
     - run(input_text) -> mx.array or np.array
     """
 
-    def __init__(self, model_id: str = "deterministic-stub"):
+    def __init__(self, model_id: str = "sentence-transformers/all-MiniLM-L6-v2"):
         """Initialize the embedding model.
 
         Args:
-            model_id: Model identifier (currently unused in stub)
+            model_id: HuggingFace model identifier or local path
         """
         self.model_id = model_id
-        self.embedding_dim = 4  # Dimension of stub embeddings
+
+        logger.info(f"Loading embedding model: {model_id}")
+
+        # Load model and tokenizer from HuggingFace
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModel.from_pretrained(model_id)
+
+        # Set model to evaluation mode
+        self.model.eval()
+
+        # Determine embedding dimension from model config
+        self.embedding_dim = self.model.config.hidden_size
+
+        logger.info(f"Model loaded successfully. Embedding dimension: {self.embedding_dim}")
 
     def run(self, input_text: Union[str, Sequence[str]]):
         """Generate embeddings for input text(s).
@@ -74,11 +86,37 @@ class Model:
         else:
             texts = list(input_text)
 
+        # Tokenize input texts
+        encoded_input = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        )
+
         # Generate embeddings
-        vectors = [_text_to_vector(t) for t in texts]
+        with torch.no_grad():
+            model_output = self.model(**encoded_input)
+
+            # Apply mean pooling to get sentence embeddings
+            sentence_embeddings = mean_pooling(
+                model_output.last_hidden_state,
+                encoded_input["attention_mask"]
+            )
+
+            # Normalize embeddings (L2 normalization for cosine similarity)
+            sentence_embeddings = torch.nn.functional.normalize(
+                sentence_embeddings,
+                p=2,
+                dim=1
+            )
+
+        # Convert to numpy
+        embeddings_np = sentence_embeddings.cpu().numpy()
 
         # Return as MLX array if available, otherwise numpy
         if MLX_AVAILABLE:
-            return mx.array(vectors, dtype=mx.float32)
+            return mx.array(embeddings_np, dtype=mx.float32)
         else:
-            return np.array(vectors, dtype=np.float32)
+            return embeddings_np.astype("float32")
