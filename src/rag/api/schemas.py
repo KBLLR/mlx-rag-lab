@@ -10,9 +10,10 @@ from pydantic import BaseModel, Field
 
 # Health Check Schemas
 class HealthResponse(BaseModel):
-    """Health check response model."""
+    """Health check response model (Phase-4 contract)."""
 
-    status: str = Field(..., description="Service status (ok, degraded, error)", example="ok")
+    ok: bool = Field(..., description="Whether service is operational", example=True)
+    latency_ms: float = Field(..., description="Health check latency in milliseconds", example=12.5)
     tier: str = Field(..., description="Service tier identifier", example="3B")
     models_loaded: bool = Field(
         ..., description="Whether embedding models are loaded", example=True
@@ -55,6 +56,7 @@ class UpsertResponse(BaseModel):
     index_path: Optional[str] = Field(
         None, description="Path to the vector index file", example="var/indexes/technical_docs/vdb.npz"
     )
+    latency_ms: float = Field(..., description="Operation latency in milliseconds", example=234.5)
     request_id: Optional[str] = Field(
         None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
@@ -90,6 +92,7 @@ class QueryResponse(BaseModel):
     results: List[ChunkResult] = Field(..., description="Retrieved chunks ranked by relevance")
     query: str = Field(..., description="Original query text")
     collection: str = Field(..., description="Collection queried")
+    latency_ms: float = Field(..., description="Query latency in milliseconds", example=45.2)
     request_id: Optional[str] = Field(
         None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
@@ -117,6 +120,7 @@ class StatsResponse(BaseModel):
     updated_at: Optional[str] = Field(
         None, description="Last update timestamp (ISO 8601)", example="2025-11-16T14:22:00Z"
     )
+    latency_ms: float = Field(..., description="Stats operation latency in milliseconds", example=8.3)
     request_id: Optional[str] = Field(
         None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
@@ -135,6 +139,7 @@ class DeleteResponse(BaseModel):
 
     deleted_count: int = Field(..., description="Number of documents deleted", example=5)
     collection: str = Field(..., description="Collection name", example="technical_docs")
+    latency_ms: float = Field(..., description="Delete operation latency in milliseconds", example=15.7)
     request_id: Optional[str] = Field(
         None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )

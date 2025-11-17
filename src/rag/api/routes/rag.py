@@ -57,7 +57,7 @@ async def query(
     request: QueryRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
 ):
-    """Query a collection for relevant documents.
+    """Query a collection for relevant documents (Phase-4 contract).
 
     Retrieves the top-k most relevant chunks from the specified collection
     based on semantic similarity to the query text.
@@ -67,12 +67,17 @@ async def query(
         x_request_id: Optional request ID for tracing
 
     Returns:
-        QueryResponse with ranked chunks
+        QueryResponse with ranked chunks and latency
 
     Raises:
         404: Collection does not exist
         500: Query execution failed
     """
+    import time
+
+    # Start latency measurement
+    start_time = time.perf_counter()
+
     # Generate request_id if not provided
     request_id = x_request_id or str(uuid.uuid4())
 
@@ -114,14 +119,18 @@ async def query(
             for r in results
         ]
 
+        # Measure latency
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
         logger.info(
-            f"Query returned {len(chunk_results)} results [request_id={request_id}]"
+            f"Query returned {len(chunk_results)} results in {latency_ms:.2f}ms [request_id={request_id}]"
         )
 
         return QueryResponse(
             results=chunk_results,
             query=request.query,
             collection=request.collection,
+            latency_ms=latency_ms,
             request_id=request_id,
         )
 
@@ -138,7 +147,7 @@ async def upsert(
     request: UpsertRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
 ):
-    """Ingest documents into a collection.
+    """Ingest documents into a collection (Phase-4 contract).
 
     Creates or updates a collection with the provided documents.
     Documents are chunked and embedded automatically.
@@ -148,12 +157,17 @@ async def upsert(
         x_request_id: Optional request ID for tracing
 
     Returns:
-        UpsertResponse with ingestion statistics
+        UpsertResponse with ingestion statistics and latency
 
     Raises:
         400: Invalid request (empty documents, etc.)
         500: Ingestion failed
     """
+    import time
+
+    # Start latency measurement
+    start_time = time.perf_counter()
+
     # Generate request_id if not provided
     request_id = x_request_id or str(uuid.uuid4())
 
@@ -201,9 +215,12 @@ async def upsert(
         index_path.parent.mkdir(parents=True, exist_ok=True)
         vdb.savez(str(index_path))
 
+        # Measure latency
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
         logger.info(
             f"Upserted {len(request.documents)} documents "
-            f"({total_chunks} chunks) to collection '{request.collection}' "
+            f"({total_chunks} chunks) to collection '{request.collection}' in {latency_ms:.2f}ms "
             f"[request_id={request_id}]"
         )
 
@@ -212,6 +229,7 @@ async def upsert(
             documents_processed=len(request.documents),
             collection=request.collection,
             index_path=str(index_path),
+            latency_ms=latency_ms,
             request_id=request_id,
         )
 
@@ -228,20 +246,25 @@ async def delete(
     request: DeleteRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
 ):
-    """Delete documents from a collection based on filter criteria.
+    """Delete documents from a collection based on filter criteria (Phase-4 contract).
 
     Args:
         request: Delete request with filter and collection name
         x_request_id: Optional request ID for tracing
 
     Returns:
-        DeleteResponse with deletion count
+        DeleteResponse with deletion count and latency
 
     Raises:
         404: Collection does not exist
         400: Invalid filter criteria
         500: Delete operation failed
     """
+    import time
+
+    # Start latency measurement
+    start_time = time.perf_counter()
+
     # Generate request_id if not provided
     request_id = x_request_id or str(uuid.uuid4())
 
@@ -271,14 +294,18 @@ async def delete(
         if deleted_count > 0:
             vdb.savez(str(index_path))
 
+        # Measure latency
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
         logger.info(
-            f"Deleted {deleted_count} chunks from collection '{request.collection}' "
+            f"Deleted {deleted_count} chunks from collection '{request.collection}' in {latency_ms:.2f}ms "
             f"[request_id={request_id}]"
         )
 
         return DeleteResponse(
             deleted_count=deleted_count,
             collection=request.collection,
+            latency_ms=latency_ms,
             request_id=request_id,
         )
 
@@ -295,19 +322,24 @@ async def stats(
     collection: str,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
 ):
-    """Get statistics about a collection.
+    """Get statistics about a collection (Phase-4 contract).
 
     Args:
         collection: Collection name (query parameter)
         x_request_id: Optional request ID for tracing
 
     Returns:
-        StatsResponse with collection statistics
+        StatsResponse with collection statistics and latency
 
     Raises:
         404: Collection does not exist
         500: Failed to read statistics
     """
+    import time
+
+    # Start latency measurement
+    start_time = time.perf_counter()
+
     # Generate request_id if not provided
     request_id = x_request_id or str(uuid.uuid4())
 
@@ -356,9 +388,12 @@ async def stats(
             except Exception:
                 pass
 
+        # Measure latency
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
         logger.info(
             f"Stats for collection '{collection}': "
-            f"{num_chunks} chunks, {num_documents} documents "
+            f"{num_chunks} chunks, {num_documents} documents in {latency_ms:.2f}ms "
             f"[request_id={request_id}]"
         )
 
@@ -371,6 +406,7 @@ async def stats(
             index_path=str(index_path),
             created_at=created_at,
             updated_at=updated_at,
+            latency_ms=latency_ms,
             request_id=request_id,
         )
 
