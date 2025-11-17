@@ -68,7 +68,13 @@ class ChunkResult(BaseModel):
 
     text: str = Field(..., description="Chunk text content")
     source: str = Field(..., description="Source document identifier")
-    score: float = Field(..., description="Similarity score", example=0.87)
+    score: float = Field(
+        ...,
+        description="Cosine similarity score in range [-1, 1] (L2-normalized embeddings)",
+        example=0.87,
+        ge=-1.0,
+        le=1.0
+    )
     metadata: Optional[Dict[str, Any]] = Field(None, description="Chunk metadata if available")
 
 
@@ -79,7 +85,10 @@ class QueryRequest(BaseModel):
     collection: str = Field(..., description="Collection name to query", example="technical_docs")
     k: int = Field(5, description="Number of chunks to retrieve", ge=1, le=100)
     threshold: Optional[float] = Field(
-        0.5, description="Minimum similarity threshold (0-1)", ge=0.0, le=1.0
+        0.5,
+        description="Minimum cosine similarity threshold in range [-1, 1]. Typical values: 0.3 (broad), 0.6 (moderate), 0.85 (strict)",
+        ge=-1.0,
+        le=1.0
     )
     filter: Optional[Dict[str, str]] = Field(
         None, description="Metadata filter criteria (AND logic for multiple keys)", example={"author": "alice", "category": "physics"}

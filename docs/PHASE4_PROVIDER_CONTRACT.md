@@ -128,14 +128,14 @@ async function checkRAGHealth(requestId?: string): Promise<HealthResponse> {
 - `query` (string): User's search query
 - `collection` (string): Target collection name
 - `k` (int): Number of results to return (1-100, default: 5)
-- `threshold` (float): Minimum similarity score (0-1, default: 0.5)
+- `threshold` (float): Minimum cosine similarity score in range [-1, 1] (default: 0.5, typically use 0.3-0.85)
 - `filter` (object | null): Metadata filter (AND logic for multiple keys)
 
 **Response Fields:**
 - `results` (array): Ranked chunks by similarity
   - `text` (string): Chunk content
   - `source` (string): Source document identifier
-  - `score` (float): Cosine similarity score (0-1)
+  - `score` (float): Cosine similarity score in range [-1, 1] (L2-normalized embeddings)
   - `metadata` (object | null): Associated metadata
 - `latency_ms` (float): Query execution time
 
