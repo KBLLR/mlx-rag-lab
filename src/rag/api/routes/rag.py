@@ -52,7 +52,7 @@ def _collection_exists(collection: str) -> bool:
     return _get_index_path(collection).exists()
 
 
-@router.post("/query", response_model=QueryResponse, tags=["RAG"])
+@router.post("/rag_query", response_model=QueryResponse, tags=["RAG"])
 async def query(
     request: QueryRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -133,7 +133,7 @@ async def query(
         raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}")
 
 
-@router.post("/upsert", response_model=UpsertResponse, tags=["RAG"])
+@router.post("/rag_upsert", response_model=UpsertResponse, tags=["RAG"])
 async def upsert(
     request: UpsertRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -223,7 +223,7 @@ async def upsert(
         raise HTTPException(status_code=500, detail=f"Upsert failed: {str(e)}")
 
 
-@router.post("/delete", response_model=DeleteResponse, tags=["RAG"])
+@router.post("/rag_delete", response_model=DeleteResponse, tags=["RAG"])
 async def delete(
     request: DeleteRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
@@ -290,7 +290,7 @@ async def delete(
         raise HTTPException(status_code=500, detail=f"Delete operation failed: {str(e)}")
 
 
-@router.get("/stats", response_model=StatsResponse, tags=["RAG"])
+@router.get("/rag_stats", response_model=StatsResponse, tags=["RAG"])
 async def stats(
     collection: str,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),

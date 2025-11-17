@@ -1,4 +1,4 @@
-"""Contract tests for the /stats endpoint."""
+"""Contract tests for the /rag_stats endpoint."""
 
 from __future__ import annotations
 
@@ -44,8 +44,8 @@ def test_collection(tmp_path: Path) -> str:
 
 
 def test_stats_contract_fields(test_collection: str):
-    """Test that /stats endpoint returns all expected fields."""
-    response = client.get(f"/stats?collection={test_collection}")
+    """Test that /rag_stats endpoint returns all expected fields."""
+    response = client.get(f"/rag_stats?collection={test_collection}")
     assert response.status_code == 200
 
     payload = response.json()
@@ -78,10 +78,10 @@ def test_stats_contract_fields(test_collection: str):
 
 
 def test_stats_with_request_id(test_collection: str):
-    """Test that /stats endpoint respects X-Request-ID header."""
+    """Test that /rag_stats endpoint respects X-Request-ID header."""
     test_request_id = "test-stats-456"
     response = client.get(
-        f"/stats?collection={test_collection}", headers={"X-Request-ID": test_request_id}
+        f"/rag_stats?collection={test_collection}", headers={"X-Request-ID": test_request_id}
     )
     assert response.status_code == 200
 
@@ -90,8 +90,8 @@ def test_stats_with_request_id(test_collection: str):
 
 
 def test_stats_nonexistent_collection():
-    """Test that /stats returns 404 for nonexistent collection."""
-    response = client.get("/stats?collection=nonexistent_collection")
+    """Test that /rag_stats returns 404 for nonexistent collection."""
+    response = client.get("/rag_stats?collection=nonexistent_collection")
     assert response.status_code == 404
 
     error = response.json()
@@ -101,7 +101,7 @@ def test_stats_nonexistent_collection():
 
 def test_stats_chunk_and_document_counts(test_collection: str):
     """Test that chunk and document counts are accurate."""
-    response = client.get(f"/stats?collection={test_collection}")
+    response = client.get(f"/rag_stats?collection={test_collection}")
     assert response.status_code == 200
 
     payload = response.json()
@@ -113,7 +113,7 @@ def test_stats_chunk_and_document_counts(test_collection: str):
 
 def test_stats_timestamps(test_collection: str):
     """Test that timestamps are in ISO 8601 format."""
-    response = client.get(f"/stats?collection={test_collection}")
+    response = client.get(f"/rag_stats?collection={test_collection}")
     assert response.status_code == 200
 
     payload = response.json()
