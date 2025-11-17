@@ -32,7 +32,43 @@ uv sync                             # installs deps + console scripts
 uv run mlxlab
 ```
 
-CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` “just works”. See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
+CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` "just works". See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
+
+---
+
+## Testing the RAG Engine
+
+The Tier 3B RAG API has a comprehensive test suite covering all endpoints, metadata filtering, and similarity scoring.
+
+**Run all RAG tests:**
+```bash
+# Install dev dependencies first (if not done)
+uv sync
+
+# Run the full RAG test suite
+uv run pytest tests/rag -v
+
+# Run specific test categories
+uv run pytest tests/rag/test_query_filtering.py -v  # Metadata filtering tests
+uv run pytest tests/rag/test_similarity.py -v        # Similarity scoring tests
+uv run pytest tests/rag/test_health_api.py -v        # Health endpoint tests
+uv run pytest tests/rag/test_stats_api.py -v         # Stats endpoint tests
+```
+
+**Run the RAG API server (for manual testing):**
+```bash
+# Start the FastAPI server
+uv run uvicorn rag.api.main:app --reload
+
+# In another terminal, test endpoints
+curl http://localhost:8000/health
+curl http://localhost:8000/docs  # OpenAPI documentation
+```
+
+**Contract validation:**
+- All endpoints match the documented API contract in `docs/API_CONTRACT.md`
+- Request/response schemas are validated via Pydantic models
+- Tests cover edge cases: empty filters, large k values, threshold filtering, etc.
 
 ---
 

@@ -12,13 +12,19 @@ from pydantic import BaseModel, Field
 class HealthResponse(BaseModel):
     """Health check response model."""
 
-    status: str = Field(..., description="Service status", example="ok")
+    status: str = Field(..., description="Service status (ok, degraded, error)", example="ok")
     tier: str = Field(..., description="Service tier identifier", example="3B")
     models_loaded: bool = Field(
         ..., description="Whether embedding models are loaded", example=True
     )
     embedding_model: Optional[str] = Field(
         None, description="Currently loaded embedding model ID", example="all-MiniLM-L6-v2"
+    )
+    index_available: bool = Field(
+        ..., description="Whether index storage is accessible", example=True
+    )
+    request_id: Optional[str] = Field(
+        None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
 
 
@@ -46,6 +52,12 @@ class UpsertResponse(BaseModel):
     chunks_added: int = Field(..., description="Number of chunks added to index", example=142)
     documents_processed: int = Field(..., description="Number of documents processed", example=3)
     collection: str = Field(..., description="Collection name", example="technical_docs")
+    index_path: Optional[str] = Field(
+        None, description="Path to the vector index file", example="var/indexes/technical_docs/vdb.npz"
+    )
+    request_id: Optional[str] = Field(
+        None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
+    )
 
 
 # RAG Query Schemas (Retrieval)
@@ -78,6 +90,9 @@ class QueryResponse(BaseModel):
     results: List[ChunkResult] = Field(..., description="Retrieved chunks ranked by relevance")
     query: str = Field(..., description="Original query text")
     collection: str = Field(..., description="Collection queried")
+    request_id: Optional[str] = Field(
+        None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
+    )
 
 
 # RAG Stats Schemas
@@ -92,6 +107,18 @@ class StatsResponse(BaseModel):
     )
     embedding_dim: Optional[int] = Field(
         None, description="Embedding vector dimensions", example=4
+    )
+    index_path: Optional[str] = Field(
+        None, description="Path to the vector index file", example="var/indexes/technical_docs/vdb.npz"
+    )
+    created_at: Optional[str] = Field(
+        None, description="Index creation timestamp (ISO 8601)", example="2025-11-16T10:30:00Z"
+    )
+    updated_at: Optional[str] = Field(
+        None, description="Last update timestamp (ISO 8601)", example="2025-11-16T14:22:00Z"
+    )
+    request_id: Optional[str] = Field(
+        None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
 
 
@@ -108,3 +135,6 @@ class DeleteResponse(BaseModel):
 
     deleted_count: int = Field(..., description="Number of documents deleted", example=5)
     collection: str = Field(..., description="Collection name", example="technical_docs")
+    request_id: Optional[str] = Field(
+        None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
+    )
