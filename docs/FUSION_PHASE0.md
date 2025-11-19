@@ -62,9 +62,8 @@ mlx-rag-lab/
 │   │   ├── chat/           # Chat wrapper for MLX LLMs
 │   │   │   ├── gpt_oss_wrapper.py (302 lines) – ChatSession class
 │   │   │   └── templates.py (66 lines) – Prompt templates, string utils
-│   │   ├── cli/            # CLI utilities and scripts (1,354 lines total)
+│   │   ├── cli/            # CLI utilities and scripts (1,094 lines total)
 │   │   │   ├── entrypoints.py (43 lines) – Console script wrappers
-│   │   │   ├── interactive_rag.py (260 lines) – Interactive RAG CLI
 │   │   │   ├── app_launcher.py (306 lines) – App launcher utilities
 │   │   │   ├── flux_*.py (494 lines) – Flux image generation
 │   │   │   ├── benchmark.py (97 lines) – Benchmark utilities
