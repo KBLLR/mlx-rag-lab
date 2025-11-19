@@ -21,26 +21,40 @@ from ui import FramedApp, get_console, label, build_rag_dashboard
 
 console = get_console()
 
-DEFAULT_VDB_PATH = Path("var/indexes/vdb.npz")
+DEFAULT_INDEX_ROOT = Path("var/indexes")
+DEFAULT_SOURCE_ROOT = Path("var/source_docs")
+DEFAULT_COLLECTION = "default"
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
 DEFAULT_RERANKER_ID = "mlx-community/mxbai-rerank-large-v2"
-SOURCE_DOCS_DIR = Path("var/source_docs")
 
 # Global references for cleanup
 _model_engine = None
 _reranker = None
 _vdb = None
+_current_collection = None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="MLX RAG CLI – ask questions over a local vector index."
+        description="MLX RAG CLI – ask questions over collection-based vector indexes (Phase 4)."
     )
     parser.add_argument(
-        "--vdb-path",
+        "--collection",
+        type=str,
+        default=DEFAULT_COLLECTION,
+        help="Collection name to query/manage (Phase 4 architecture).",
+    )
+    parser.add_argument(
+        "--index-root",
         type=Path,
-        default=DEFAULT_VDB_PATH,
-        help="Path to the vector database (.npz).",
+        default=DEFAULT_INDEX_ROOT,
+        help="Root directory for all collection indexes.",
+    )
+    parser.add_argument(
+        "--source-root",
+        type=Path,
+        default=DEFAULT_SOURCE_ROOT,
+        help="Root directory for source documents (organized by collection subdirs).",
     )
     parser.add_argument(
         "--model-id",
@@ -95,9 +109,38 @@ def build_prompt(context: str, question: str) -> str:
     )
 
 
-def rebuild_vdb(vdb_path: Path, source_dir: Path) -> VectorDB:
-    """Rebuild VectorDB from PDFs in source directory."""
-    console.print(f"\n[bold cyan]Scanning for PDFs in {source_dir}...[/bold cyan]")
+def get_collection_path(index_root: Path, collection: str) -> Path:
+    """Get the VDB path for a collection (Phase 4 structure)."""
+    return index_root / collection / "vdb.npz"
+
+
+def get_collection_source_dir(source_root: Path, collection: str) -> Path:
+    """Get the source directory for a collection."""
+    return source_root / collection
+
+
+def list_collections(index_root: Path) -> list[str]:
+    """List all available collections."""
+    if not index_root.exists():
+        return []
+    return sorted([d.name for d in index_root.iterdir() if d.is_dir() and (d / "vdb.npz").exists()])
+
+
+def list_source_collections(source_root: Path) -> list[str]:
+    """List all collections with source documents."""
+    if not source_root.exists():
+        return []
+    return sorted([d.name for d in source_root.iterdir() if d.is_dir()])
+
+
+def rebuild_collection(collection: str, index_root: Path, source_root: Path) -> VectorDB:
+    """Rebuild VectorDB for a specific collection (Phase 4 compliant)."""
+    source_dir = get_collection_source_dir(source_root, collection)
+    vdb_path = get_collection_path(index_root, collection)
+
+    console.print(f"\n[bold cyan]Rebuilding collection '{collection}'...[/bold cyan]")
+    console.print(f"Source: {source_dir}")
+    console.print(f"Index: {vdb_path}\n")
 
     # Ensure source directory exists
     source_dir.mkdir(parents=True, exist_ok=True)
@@ -126,7 +169,7 @@ def rebuild_vdb(vdb_path: Path, source_dir: Path) -> VectorDB:
     ]
 
     with Progress(*progress_columns, console=console) as progress:
-        task = progress.add_task("Processing PDFs...", total=len(pdf_files))
+        task = progress.add_task(f"Processing {collection}...", total=len(pdf_files))
 
         for pdf_path in pdf_files:
             try:
@@ -145,15 +188,15 @@ def rebuild_vdb(vdb_path: Path, source_dir: Path) -> VectorDB:
         console.print("[yellow]No content extracted from any PDFs.[/yellow]")
         return None
 
-    # Save VDB
+    # Save VDB (Phase 4 structure)
     vdb_path.parent.mkdir(parents=True, exist_ok=True)
     new_vdb.savez(vdb_path)
-    write_metadata(vdb_path, "default", processed_docs, source_dir)
+    write_metadata(vdb_path, collection, processed_docs, source_dir)
 
-    console.print(f"\n[bold green]✓ VectorDB rebuilt successfully![/bold green]")
+    console.print(f"\n[bold green]✓ Collection '{collection}' rebuilt successfully![/bold green]")
     console.print(f"  • Processed: {len(processed_docs)} PDF(s)")
     console.print(f"  • Chunks: {len(new_vdb.content)}")
-    console.print(f"  • Saved to: {vdb_path}\n")
+    console.print(f"  • Index: {vdb_path}\n")
 
     return new_vdb
 
@@ -187,17 +230,56 @@ def list_documents(vdb: VectorDB) -> None:
     console.print()
 
 
-def show_help() -> None:
+def show_collections(index_root: Path, source_root: Path, current_collection: str) -> None:
+    """Show all available collections (Phase 4)."""
+    indexed = list_collections(index_root)
+    sources = list_source_collections(source_root)
+
+    table = Table(title="Collections (Phase 4 Architecture)")
+    table.add_column("Collection", style="cyan")
+    table.add_column("Status", style="green")
+    table.add_column("Active", style="yellow", justify="center")
+
+    all_collections = sorted(set(indexed + sources))
+
+    if not all_collections:
+        console.print("\n[yellow]No collections found.[/yellow]")
+        console.print(f"[dim]Create sources in: {source_root}/<collection>/[/dim]\n")
+        return
+
+    for coll in all_collections:
+        has_index = coll in indexed
+        has_source = coll in sources
+
+        if has_index and has_source:
+            status = "✓ Indexed"
+        elif has_index:
+            status = "⚠ Indexed (no source)"
+        else:
+            status = "○ Source only"
+
+        is_active = "●" if coll == current_collection else ""
+        table.add_row(coll, status, is_active)
+
+    console.print()
+    console.print(table)
+    console.print()
+
+
+def show_help(collection: str, source_root: Path) -> None:
     """Show available commands."""
     help_text = Text()
-    help_text.append("\n Available Commands:\n", style="bold cyan")
+    help_text.append("\n Available Commands (Phase 4):\n", style="bold cyan")
     help_text.append("  • ", style="dim")
     help_text.append("rebuild", style="yellow")
-    help_text.append(" - Scan and rebuild VectorDB from ", style="dim")
-    help_text.append(f"{SOURCE_DOCS_DIR}\n", style="cyan")
+    help_text.append(" - Scan and rebuild current collection from ", style="dim")
+    help_text.append(f"{source_root}/{collection}/\n", style="cyan")
     help_text.append("  • ", style="dim")
     help_text.append("list", style="yellow")
-    help_text.append(" - Show all indexed documents\n", style="dim")
+    help_text.append(" - Show all indexed documents in current collection\n", style="dim")
+    help_text.append("  • ", style="dim")
+    help_text.append("collections", style="yellow")
+    help_text.append(" - Show all available collections\n", style="dim")
     help_text.append("  • ", style="dim")
     help_text.append("help", style="yellow")
     help_text.append(" - Show this help message\n", style="dim")
@@ -207,6 +289,8 @@ def show_help() -> None:
     help_text.append("quit", style="yellow")
     help_text.append(" - Exit the application\n", style="dim")
     help_text.append("\n  Type any question to query the RAG system\n", style="dim italic")
+    help_text.append(f"\n  Current collection: ", style="dim")
+    help_text.append(f"{collection}\n", style="cyan bold")
 
     console.print(help_text)
 
@@ -238,15 +322,28 @@ def cleanup_handler(signum, frame):
 
 
 def main() -> None:
-    global _model_engine, _reranker, _vdb
+    global _model_engine, _reranker, _vdb, _current_collection
 
     # Register signal handler for graceful Ctrl+C cleanup
     signal.signal(signal.SIGINT, cleanup_handler)
 
     args = build_parser().parse_args()
+    _current_collection = args.collection
 
-    console.print("\n[bold cyan]Loading RAG system...[/bold cyan]")
-    _vdb = VectorDB(str(args.vdb_path))
+    # Get collection-specific path (Phase 4)
+    vdb_path = get_collection_path(args.index_root, args.collection)
+
+    console.print("\n[bold cyan]Loading RAG system (Phase 4)...[/bold cyan]")
+    console.print(f"Collection: [yellow]{args.collection}[/yellow]")
+    console.print(f"Index: {vdb_path}")
+
+    # Load VDB if it exists
+    if vdb_path.exists():
+        _vdb = VectorDB(str(vdb_path))
+        console.print(f"[green]Loaded {len(_vdb.content)} chunks[/green]")
+    else:
+        console.print(f"[yellow]Collection not indexed yet. Use 'rebuild' command.[/yellow]")
+        _vdb = VectorDB()  # Empty VDB
 
     # Make reranker optional to avoid timeouts/semaphore leaks
     if args.no_reranker:
@@ -273,6 +370,8 @@ def main() -> None:
     footer_text.append(", ", style="dim")
     footer_text.append("list", style="yellow")
     footer_text.append(", ", style="dim")
+    footer_text.append("collections", style="yellow")
+    footer_text.append(", ", style="dim")
     footer_text.append("help", style="yellow")
     footer_text.append(" | ", style="dim")
     footer_text.append("Ctrl+C to exit", style="cyan")
@@ -281,21 +380,24 @@ def main() -> None:
     # Add dashboard to body
     model_name = Path(args.model_id).name if "/" in args.model_id else args.model_id
     dashboard = build_rag_dashboard(
-        vdb_path=str(args.vdb_path),
+        vdb_path=str(vdb_path),
         num_chunks=len(vdb.content),
         model_name=model_name,
     )
     app.add_content(dashboard)
     app.add_content(Text(""))
+    app.add_content(label(f"Phase 4 Architecture | Collection: {args.collection}", "muted"))
     app.add_content(label(f"Reranker: {'Enabled' if not args.no_reranker else 'Disabled'} | Top-K: {args.top_k}", "muted"))
-    app.add_content(label(f"Source Directory: {SOURCE_DOCS_DIR}", "muted"))
+    app.add_content(label(f"Source: {get_collection_source_dir(args.source_root, args.collection)}", "muted"))
     app.add_content(Text(""))
 
     # Show help hint
     help_hint = Text()
     help_hint.append("💡 Type ", style="dim")
     help_hint.append("help", style="yellow")
-    help_hint.append(" to see available commands", style="dim")
+    help_hint.append(" to see commands or ", style="dim")
+    help_hint.append("collections", style="yellow")
+    help_hint.append(" to see all collections", style="dim")
     app.add_content(help_hint)
     app.add_content(Text(""))
 
@@ -331,7 +433,15 @@ def main() -> None:
             elif command == "help":
                 if app._live:
                     app._live.__exit__(None, None, None)
-                show_help()
+                show_help(args.collection, args.source_root)
+                if app._running and app._live:
+                    app._live.__enter__()
+                continue
+
+            elif command == "collections":
+                if app._live:
+                    app._live.__exit__(None, None, None)
+                show_collections(args.index_root, args.source_root, args.collection)
                 if app._running and app._live:
                     app._live.__enter__()
                 continue
@@ -348,8 +458,8 @@ def main() -> None:
                 if app._live:
                     app._live.__exit__(None, None, None)
 
-                # Rebuild VDB
-                new_vdb = rebuild_vdb(args.vdb_path, SOURCE_DOCS_DIR)
+                # Rebuild collection (Phase 4)
+                new_vdb = rebuild_collection(args.collection, args.index_root, args.source_root)
 
                 if new_vdb is not None:
                     # Update global reference
@@ -359,13 +469,15 @@ def main() -> None:
                     # Update dashboard
                     app.clear_content()
                     dashboard = build_rag_dashboard(
-                        vdb_path=str(args.vdb_path),
+                        vdb_path=str(vdb_path),
                         num_chunks=len(vdb.content),
                         model_name=model_name,
                     )
                     app.add_content(dashboard)
                     app.add_content(Text(""))
+                    app.add_content(label(f"Phase 4 Architecture | Collection: {args.collection}", "muted"))
                     app.add_content(label(f"Reranker: {'Enabled' if not args.no_reranker else 'Disabled'} | Top-K: {args.top_k}", "muted"))
+                    app.add_content(label(f"Source: {get_collection_source_dir(args.source_root, args.collection)}", "muted"))
                     app.add_content(Text(""))
 
                 if app._running and app._live:
