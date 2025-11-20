@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from rag.api.exceptions import RagException
-from rag.api.routes import rag
+from rag.api.routes import rag, fusion
 from rag.api.schemas import HealthResponse
 from rag.models.model import Model
 
@@ -72,6 +72,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(rag.router, tags=["RAG"])
+app.include_router(fusion.router, tags=["Fusion"])
 
 
 # Exception Handlers

@@ -152,3 +152,109 @@ class DeleteResponse(BaseModel):
     request_id: Optional[str] = Field(
         None, description="Request ID for tracing", example="550e8400-e29b-41d4-a716-446655440000"
     )
+
+
+# Fusion API Schemas (Profile-based access)
+class FusionQueryRequest(BaseModel):
+    """Request body for fusion query endpoint (profile-based).
+
+    This is a higher-level interface designed for Tier-2 orchestrators
+    and tools (like mlx-openai-server, Smart Campus). It uses profile_id
+    instead of explicit collection names.
+    """
+
+    profile_id: str = Field(
+        ...,
+        description="Profile identifier for scoping (e.g., 'campus', 'avatar')",
+        example="campus"
+    )
+    query: str = Field(
+        ...,
+        description="User query text",
+        example="What did we learn about photosynthesis?"
+    )
+    filters: Optional[Dict[str, str]] = Field(
+        None,
+        description="Metadata filters for the query (AND logic). Schema depends on profile.",
+        example={"classroom_id": "bio-101", "subject": "biology"}
+    )
+    top_k: Optional[int] = Field(
+        None,
+        description="Number of results to return (uses profile default if not specified)",
+        ge=1,
+        le=100
+    )
+    threshold: Optional[float] = Field(
+        None,
+        description="Minimum cosine similarity threshold (uses profile default if not specified)",
+        ge=-1.0,
+        le=1.0
+    )
+    user_id: Optional[str] = Field(
+        None,
+        description="Optional user ID for logging/attribution",
+        example="student-123"
+    )
+    classroom_id: Optional[str] = Field(
+        None,
+        description="Optional classroom ID (campus profile) - shortcut for filters.classroom_id",
+        example="bio-101"
+    )
+
+
+class FusionTrace(BaseModel):
+    """Tracing metadata for fusion responses."""
+
+    profile_id: str = Field(..., description="Profile used for the query")
+    collection_used: str = Field(..., description="Underlying collection queried")
+    latency_ms: float = Field(..., description="Query latency in milliseconds")
+    filters_applied: Optional[Dict[str, str]] = Field(
+        None,
+        description="Metadata filters that were applied"
+    )
+
+
+class FusionQueryResponse(BaseModel):
+    """Response for fusion query endpoint.
+
+    Designed to be easily consumable by Tier-2 orchestrators
+    and tool backends.
+    """
+
+    results: List[ChunkResult] = Field(
+        ...,
+        description="Retrieved chunks ranked by relevance"
+    )
+    trace: FusionTrace = Field(
+        ...,
+        description="Tracing and metadata about the query execution"
+    )
+    tokens: Optional[int] = Field(
+        None,
+        description="Token count for the results (if calculated)"
+    )
+    request_id: str = Field(
+        ...,
+        description="Request ID for distributed tracing"
+    )
+
+
+class ProfileInfo(BaseModel):
+    """Information about a RAG profile."""
+
+    profile_id: str = Field(..., description="Profile identifier")
+    collection: str = Field(..., description="Underlying collection name")
+    default_k: int = Field(..., description="Default number of results")
+    default_threshold: float = Field(..., description="Default similarity threshold")
+    metadata_schema: Optional[List[str]] = Field(
+        None,
+        description="Expected metadata fields for this profile"
+    )
+    description: str = Field(..., description="Profile description")
+
+
+class ProfilesResponse(BaseModel):
+    """Response listing available profiles."""
+
+    profiles: List[ProfileInfo] = Field(..., description="List of available profiles")
+    request_id: str = Field(..., description="Request ID for tracing")
