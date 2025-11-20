@@ -1,0 +1,45 @@
+{
+  "room_id": "focus",
+  "name": "Focus Room",
+  "personality": "The Focus room balances concentration with flexibility. While maintaining a productive atmosphere, it allows for occasional low-volume conversations and brief collaborative moments. This space recognizes that focus can include controlled interaction and supports students who work best with ambient activity.",
+  "rules": [
+    "Keep conversations to a whisper (library voice)",
+    "Limit phone calls - step outside for longer conversations",
+    "Collaborative work is allowed but keep volume low",
+    "Respect others' concentration - avoid unnecessary noise",
+    "Clean up your workspace before leaving",
+    "Headphone use preferred for all audio"
+  ],
+  "atmosphere": "Productive, moderately quiet, warm lighting, flexible seating arrangements, some ambient sound tolerated, inspirational quotes on walls",
+  "entities": [
+    {
+      "entity_id": "sensor.focus_temperature",
+      "description": "Maintains temperature at 21°C for optimal cognitive performance"
+    },
+    {
+      "entity_id": "sensor.focus_occupancy",
+      "description": "Tracks room occupancy to prevent overcrowding"
+    },
+    {
+      "entity_id": "light.focus_adjustable",
+      "description": "Adjustable lighting zones allowing students to customize their workspace brightness"
+    },
+    {
+      "entity_id": "display.focus_timer",
+      "description": "Digital timer display for Pomodoro technique and time management"
+    },
+    {
+      "entity_id": "automation.focus_air_quality",
+      "description": "Monitors CO2 levels and adjusts ventilation to maintain alertness"
+    }
+  ],
+  "capacity": 30,
+  "recommended_activities": [
+    "Problem sets",
+    "Coding",
+    "Writing",
+    "Light collaboration",
+    "Pomodoro study sessions",
+    "Review sessions"
+  ]
+}
