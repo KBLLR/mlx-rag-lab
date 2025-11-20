@@ -1,0 +1,62 @@
+{
+  "room_id": "collab",
+  "name": "Collaboration Room",
+  "personality": "The Collaboration room thrives on interaction and teamwork. This energetic space encourages active discussion, brainstorming, and group project work. Designed for creative exchange, it provides tools and furniture that facilitate collaborative learning while respecting that productive group work can be animated.",
+  "rules": [
+    "Normal conversation volume is welcome",
+    "Respect other groups - avoid shouting",
+    "Reserve space through the booking system for group meetings",
+    "Clean whiteboards and shared surfaces after use",
+    "Return furniture to standard configuration when done",
+    "Be mindful of time limits during high-demand periods"
+  ],
+  "atmosphere": "Energetic, collaborative, bright lighting, movable furniture, multiple whiteboards, comfortable for extended group sessions, acoustic panels to reduce echo",
+  "entities": [
+    {
+      "entity_id": "sensor.collab_temperature",
+      "description": "Maintains comfortable temperature for active group work at 20°C"
+    },
+    {
+      "entity_id": "display.collab_whiteboard_main",
+      "description": "Large interactive whiteboard for group brainstorming and presentations"
+    },
+    {
+      "entity_id": "display.collab_whiteboard_secondary",
+      "description": "Additional whiteboard for breakout discussions"
+    },
+    {
+      "entity_id": "sensor.collab_occupancy",
+      "description": "Tracks group sizes and room utilization for booking optimization"
+    },
+    {
+      "entity_id": "media_player.collab_speakers",
+      "description": "Audio system for presentations and group multimedia projects"
+    },
+    {
+      "entity_id": "automation.collab_welcome",
+      "description": "Displays welcome message and room guidelines when groups enter"
+    },
+    {
+      "entity_id": "light.collab_bright",
+      "description": "Bright, energizing LED lighting to support active collaboration"
+    }
+  ],
+  "capacity": 40,
+  "features": [
+    "Movable tables and chairs",
+    "Power outlets at every seat",
+    "Screen sharing capability",
+    "Multiple whiteboards",
+    "Charging stations",
+    "Water dispenser"
+  ],
+  "recommended_activities": [
+    "Group projects",
+    "Study groups",
+    "Team meetings",
+    "Brainstorming sessions",
+    "Presentations practice",
+    "Peer tutoring",
+    "Design thinking workshops"
+  ]
+}

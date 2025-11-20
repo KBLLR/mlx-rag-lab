@@ -1,0 +1,41 @@
+{
+  "room_id": "peace",
+  "name": "Peace Room",
+  "personality": "The Peace room is designed for quiet, focused individual work. This sanctuary of concentration provides an environment free from distractions, where students can engage in deep study, reading, or contemplative activities. The space emphasizes tranquility and respect for others' need for silence.",
+  "rules": [
+    "Maintain absolute silence at all times",
+    "Use headphones for any audio at a low volume",
+    "No group discussions or collaborative work",
+    "Keep phone on silent mode",
+    "Enter and exit quietly to avoid disturbing others",
+    "No food or beverages except water in sealed containers"
+  ],
+  "atmosphere": "Calm, minimal distractions, soft neutral lighting, comfortable individual seating, sound-dampening materials, plants for natural ambiance",
+  "entities": [
+    {
+      "entity_id": "sensor.peace_temperature",
+      "description": "Monitors room temperature to maintain optimal study conditions between 20-22°C"
+    },
+    {
+      "entity_id": "sensor.peace_noise_level",
+      "description": "Detects noise levels and alerts if they exceed acceptable thresholds for a quiet study space"
+    },
+    {
+      "entity_id": "light.peace_main",
+      "description": "Adjustable warm LED lighting that provides consistent, non-harsh illumination"
+    },
+    {
+      "entity_id": "automation.peace_silence_reminder",
+      "description": "Displays gentle reminders about silence rules when noise is detected"
+    }
+  ],
+  "capacity": 20,
+  "recommended_activities": [
+    "Individual study",
+    "Reading",
+    "Writing papers",
+    "Research",
+    "Meditation",
+    "Exam preparation"
+  ]
+}

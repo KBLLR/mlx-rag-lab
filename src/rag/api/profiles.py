@@ -31,6 +31,14 @@ PROFILES: Dict[str, ProfileConfig] = {
         metadata_schema=["classroom_id", "subject", "teacher_id", "date", "document_type"],
         description="Smart Campus classroom content and learning materials",
     ),
+    "rooms": ProfileConfig(
+        profile_id="rooms",
+        collection="rooms",
+        default_k=5,
+        default_threshold=0.6,
+        metadata_schema=["room_id", "source_file", "tags", "entity_id", "section"],
+        description="Smart Campus room personalities and context (Phase-4)",
+    ),
     "avatar": ProfileConfig(
         profile_id="avatar",
         collection="avatar_knowledge_base",

@@ -79,8 +79,25 @@ class ChunkResult(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    """Request body for query endpoint."""
+    """Request body for query endpoint (Phase-4 enhanced)."""
 
+    # Phase-4 tracing fields (optional for backward compatibility)
+    requestId: Optional[str] = Field(
+        None,
+        description="Request ID for distributed tracing",
+        examples=["req_550e8400-e29b-41d4-a716-446655440000"]
+    )
+    source: Optional[str] = Field(
+        None,
+        description="Source system identifier (e.g., 'smart-campus', 'avatar')",
+        examples=["smart-campus", "avatar"]
+    )
+    timestamp: Optional[str] = Field(
+        None,
+        description="Request timestamp in ISO 8601 format",
+        examples=["2025-11-20T12:00:00Z"]
+    )
+    # Core query fields
     query: str = Field(..., description="Query text", example="How does MLX handle embeddings?")
     collection: str = Field(..., description="Collection name to query", example="technical_docs")
     k: int = Field(5, description="Number of chunks to retrieve", ge=1, le=100)

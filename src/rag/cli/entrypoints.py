@@ -14,6 +14,7 @@ from apps import chat_cli as chat_cli_module
 from apps import classify_cli as classify_cli_module
 from apps import flux_cli as flux_cli_module
 from apps import ingest_cli as ingest_cli_module
+from apps import ingest_rooms_cli as ingest_rooms_cli_module
 from apps import mlxlab_cli as mlxlab_cli_module
 from apps import musicgen_cli as musicgen_cli_module
 from apps import rag_cli as rag_cli_module
@@ -40,4 +41,5 @@ bench_cli_main = _make_runner(bench_cli_module.main)
 musicgen_cli_main = _make_runner(musicgen_cli_module.main)
 whisper_cli_main = _make_runner(whisper_cli_module.main)
 ingest_cli_main = _make_runner(ingest_cli_module.main)
+ingest_rooms_cli_main = _make_runner(ingest_rooms_cli_module.main)
 classify_cli_main = _make_runner(classify_cli_module.main)

@@ -63,8 +63,8 @@ async def query(
     based on semantic similarity to the query text.
 
     Args:
-        request: Query request with query text, collection name, k, and threshold
-        x_request_id: Optional request ID for tracing
+        request: Query request with query text, collection name, k, and threshold (Phase-4 enhanced)
+        x_request_id: Optional request ID for tracing (header-based, deprecated in favor of body)
 
     Returns:
         QueryResponse with ranked chunks and latency
@@ -78,8 +78,8 @@ async def query(
     # Start latency measurement
     start_time = time.perf_counter()
 
-    # Generate request_id if not provided
-    request_id = x_request_id or str(uuid.uuid4())
+    # Generate request_id if not provided (Phase-4: prefer body, then header, then generate)
+    request_id = request.requestId or x_request_id or str(uuid.uuid4())
 
     logger.info(
         f"Query request for collection '{request.collection}' "

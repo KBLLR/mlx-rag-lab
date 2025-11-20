@@ -386,6 +386,173 @@ uv run pytest tests/rag -v
 
 ---
 
+---
+
+## Smart Campus Room Integration (Phase-4)
+
+### 6. Query Room
+**POST `/query_room`**
+
+**Request:**
+```json
+{
+  "requestId": "req_123",
+  "source": "smart-campus",
+  "timestamp": "2025-11-20T12:00:00Z",
+  "type": "room_query",
+  "room": "peace",
+  "query": "What are the rules of this room?",
+  "includeRag": true,
+  "includeEntities": false
+}
+```
+
+**Response:**
+```json
+{
+  "requestId": "req_123",
+  "room": "peace",
+  "answer": "Based on peace room information:\n1. Maintain absolute silence at all times...",
+  "entities": [],
+  "ragContext": {
+    "collection": "rooms",
+    "query": "peace: What are the rules of this room?",
+    "results": [
+      {
+        "text": "Rules:\n- Maintain absolute silence at all times\n- Use headphones...",
+        "score": 0.92,
+        "metadata": {
+          "room_id": "peace",
+          "source_file": "peace.json",
+          "section": "rules"
+        }
+      }
+    ],
+    "latencyMs": 18.4,
+    "requestId": "req_123"
+  },
+  "latencyMs": 20.1,
+  "modelUsed": "rag-only"
+}
+```
+
+**Fields:**
+- `requestId` (string): Request trace ID
+- `source` (string): Source system (e.g., "smart-campus")
+- `timestamp` (string): ISO 8601 timestamp
+- `type` (string): Request type (default: "room_query")
+- `room` (string): Room identifier (e.g., "peace", "focus", "collab")
+- `query` (string): User question about the room
+- `includeRag` (bool): Include RAG context in response (default: true)
+- `includeEntities` (bool): Include entity information (default: false)
+
+**Response Fields:**
+- `requestId` (string): Request trace ID (echoed)
+- `room` (string): Room identifier
+- `answer` (string): Generated answer (deterministic or LLM-based)
+- `entities` (array): Entity information if requested
+- `ragContext` (object | null): RAG context with retrieved chunks
+- `latencyMs` (float): Total request latency
+- `modelUsed` (string): Model used for generation ("rag-only", "mlx-phi3", etc.)
+
+**Usage from Tier-2:**
+```typescript
+async function queryRoom(room: string, query: string, requestId: string): Promise<RoomQueryResponse> {
+  const response = await fetch('http://localhost:8000/query_room', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-ID': requestId
+    },
+    body: JSON.stringify({
+      requestId,
+      source: 'smart-campus',
+      timestamp: new Date().toISOString(),
+      room,
+      query,
+      includeRag: true,
+      includeEntities: false
+    })
+  });
+  return response.json();
+}
+```
+
+---
+
+### 7. Entity Context
+**POST `/entity_context`**
+
+**Request:**
+```json
+{
+  "requestId": "req_456",
+  "source": "smart-campus",
+  "timestamp": "2025-11-20T12:00:00Z",
+  "entityId": "sensor.peace_temperature",
+  "room": "peace",
+  "k": 3,
+  "threshold": 0.5
+}
+```
+
+**Response:**
+```json
+{
+  "collection": "rooms",
+  "query": "sensor.peace_temperature",
+  "results": [
+    {
+      "text": "Entity: sensor.peace_temperature\nMonitors room temperature to maintain optimal study conditions...",
+      "score": 0.95,
+      "metadata": {
+        "room_id": "peace",
+        "entity_id": "sensor.peace_temperature",
+        "source_file": "peace.json",
+        "section": "entity"
+      }
+    }
+  ],
+  "latencyMs": 12.3,
+  "requestId": "req_456"
+}
+```
+
+**Fields:**
+- `requestId` (string): Request trace ID
+- `source` (string): Source system identifier
+- `timestamp` (string): ISO 8601 timestamp
+- `entityId` (string): Entity identifier (e.g., "sensor.peace_temperature")
+- `room` (string | null): Optional room scope
+- `k` (int): Number of results (default: 3)
+- `threshold` (float): Minimum similarity threshold (default: 0.5)
+
+**Usage from Tier-2:**
+```typescript
+async function getEntityContext(entityId: string, room: string | null, requestId: string): Promise<RAGContext> {
+  const response = await fetch('http://localhost:8000/entity_context', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-ID': requestId
+    },
+    body: JSON.stringify({
+      requestId,
+      source: 'smart-campus',
+      timestamp: new Date().toISOString(),
+      entityId,
+      room,
+      k: 3,
+      threshold: 0.5
+    })
+  });
+  return response.json();
+}
+```
+
+---
+
 ## Version History
 
+- **v0.2.0** (2025-11-20): Phase-4 Smart Campus integration with room and entity endpoints
 - **v0.1.0** (2025-11-17): Phase-4 initial contract with `ok`, `latency_ms`, and full requestId tracing
