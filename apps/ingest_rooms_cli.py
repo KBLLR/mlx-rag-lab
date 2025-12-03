@@ -45,93 +45,144 @@ DEFAULT_COLLECTION = "rooms"
 DEFAULT_OUTPUT_PATH = "var/indexes/rooms/vdb.npz"
 
 
-def load_room_json(file_path: Path) -> Dict[str, Any]:
+def load_room_json(file_path: Path) -> List[Dict[str, Any]]:
     """Load and parse a room JSON file.
 
     Args:
         file_path: Path to the room JSON file
 
     Returns:
-        Parsed room data dictionary
+        List of parsed room data dictionaries
 
     Raises:
         json.JSONDecodeError: If file is not valid JSON
         FileNotFoundError: If file does not exist
     """
     with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+        # Handle both single object and list of objects
+        if isinstance(data, list):
+            return data
+        return [data]
 
 
 def extract_room_chunks(room_data: Dict[str, Any], source_file: str) -> List[Dict[str, Any]]:
     """Extract text chunks from room data with appropriate metadata.
 
     Args:
-        room_data: Parsed room JSON data
+        room_data: Parsed room JSON data (single agent config)
         source_file: Source filename for attribution
 
     Returns:
         List of chunk dictionaries with text, metadata
     """
     chunks = []
-    room_id = room_data.get("room_id", "unknown")
-    room_name = room_data.get("name", room_id)
-
-    # Extract personality section
-    personality = room_data.get("personality", "")
-    if personality.strip():
+    
+    # Handle flat vs nested structure
+    if "metadata" in room_data:
+        # Nested structure (room-agents-config.json)
+        metadata = room_data.get("metadata", {})
+        identity = metadata.get("room_identity", {})
+        profile = metadata.get("personality_profile", {})
+        
+        room_id = identity.get("id", room_data.get("id", "unknown"))
+        room_name = identity.get("name", room_data.get("name", room_id))
+        
+        # Extract Personality
+        personality_text = (
+            f"Trait: {profile.get('trait', '')}\n"
+            f"Desire: {profile.get('desire', '')}\n"
+            f"Flaw: {profile.get('flaw', '')}\n"
+            f"Backstory: {profile.get('backstory', '')}\n"
+            f"Voice: {identity.get('voice_reference', '')}\n"
+            f"Visuals: {identity.get('visual_theme', '')}"
+        )
+        
         chunks.append({
-            "text": f"Room: {room_name}\n\nPersonality: {personality}",
+            "text": f"Room: {room_name}\n\nPersonality Profile:\n{personality_text}",
             "metadata": {
                 "room_id": room_id,
                 "source_file": source_file,
                 "section": "personality",
-                "tags": ["personality", "description"],
+                "voice_id": identity.get("voice_reference", ""),
+                "tags": ["personality", "profile", "voice"],
             }
         })
 
-    # Extract rules section (join list into text)
-    rules = room_data.get("rules", [])
-    if rules:
-        rules_text = f"Room: {room_name}\n\nRules:\n" + "\n".join(f"- {rule}" for rule in rules)
-        chunks.append({
-            "text": rules_text,
-            "metadata": {
-                "room_id": room_id,
-                "source_file": source_file,
-                "section": "rules",
-                "tags": ["rules", "guidelines"],
-            }
-        })
-
-    # Extract atmosphere section
-    atmosphere = room_data.get("atmosphere", "")
-    if atmosphere.strip():
-        chunks.append({
-            "text": f"Room: {room_name}\n\nAtmosphere: {atmosphere}",
-            "metadata": {
-                "room_id": room_id,
-                "source_file": source_file,
-                "section": "atmosphere",
-                "tags": ["atmosphere", "environment"],
-            }
-        })
-
-    # Extract entity descriptions
-    entities = room_data.get("entities", [])
-    for entity in entities:
-        entity_id = entity.get("entity_id", "")
-        description = entity.get("description", "")
-        if entity_id and description:
-            chunks.append({
-                "text": f"Room: {room_name}\n\nEntity: {entity_id}\n{description}",
+        # Extract Instructions (System Prompt)
+        instructions = room_data.get("instructions", "")
+        if instructions:
+             chunks.append({
+                "text": f"Room: {room_name}\n\nSystem Instructions:\n{instructions}",
                 "metadata": {
                     "room_id": room_id,
                     "source_file": source_file,
-                    "section": "entity",
-                    "entity_id": entity_id,
-                    "tags": ["entity", "sensor", "device"],
+                    "section": "instructions",
+                    "tags": ["instructions", "system_prompt"],
                 }
             })
+            
+    else:
+        # Legacy flat structure
+        room_id = room_data.get("room_id", "unknown")
+        room_name = room_data.get("name", room_id)
+
+        # Extract personality section
+        personality = room_data.get("personality", "")
+        if personality.strip():
+            chunks.append({
+                "text": f"Room: {room_name}\n\nPersonality: {personality}",
+                "metadata": {
+                    "room_id": room_id,
+                    "source_file": source_file,
+                    "section": "personality",
+                    "tags": ["personality", "description"],
+                }
+            })
+
+        # Extract rules section (join list into text)
+        rules = room_data.get("rules", [])
+        if rules:
+            rules_text = f"Room: {room_name}\n\nRules:\n" + "\n".join(f"- {rule}" for rule in rules)
+            chunks.append({
+                "text": rules_text,
+                "metadata": {
+                    "room_id": room_id,
+                    "source_file": source_file,
+                    "section": "rules",
+                    "tags": ["rules", "guidelines"],
+                }
+            })
+
+        # Extract atmosphere section
+        atmosphere = room_data.get("atmosphere", "")
+        if atmosphere.strip():
+            chunks.append({
+                "text": f"Room: {room_name}\n\nAtmosphere: {atmosphere}",
+                "metadata": {
+                    "room_id": room_id,
+                    "source_file": source_file,
+                    "section": "atmosphere",
+                    "tags": ["atmosphere", "environment"],
+                }
+            })
+
+        # Extract entity descriptions
+        entities = room_data.get("entities", [])
+        for entity in entities:
+            entity_id = entity.get("entity_id", "")
+            description = entity.get("description", "")
+            if entity_id and description:
+                chunks.append({
+                    "text": f"Room: {room_name}\n\nEntity: {entity_id}\n{description}",
+                    "metadata": {
+                        "room_id": room_id,
+                        "source_file": source_file,
+                        "section": "entity",
+                        "entity_id": entity_id,
+                        "tags": ["entity", "sensor", "device"],
+                    }
+                })
 
     return chunks
 
@@ -185,26 +236,24 @@ def ingest_rooms(rooms_dir: Path, collection: str, output_path: Path) -> int:
 
         for json_file in json_files:
             try:
-                # Load room data
-                room_data = load_room_json(json_file)
-                room_id = room_data.get("room_id", json_file.stem)
+                # Load room data (returns list)
+                room_data_list = load_room_json(json_file)
+                
+                for room_data in room_data_list:
+                    # Extract chunks
+                    chunks = extract_room_chunks(room_data, json_file.name)
 
-                # Extract chunks
-                chunks = extract_room_chunks(room_data, json_file.name)
+                    if not chunks:
+                        continue
 
-                if not chunks:
-                    console.print(f"[yellow]No content extracted from {json_file.name}[/yellow]")
-                    progress.update(task, advance=1)
-                    continue
-
-                # Ingest each chunk
-                for chunk_data in chunks:
-                    vdb.ingest(
-                        content=chunk_data["text"],
-                        document_name=json_file.name,
-                        metadata=chunk_data["metadata"],
-                    )
-                    total_chunks += 1
+                    # Ingest each chunk
+                    for chunk_data in chunks:
+                        vdb.ingest(
+                            content=chunk_data["text"],
+                            document_name=json_file.name,
+                            metadata=chunk_data["metadata"],
+                        )
+                        total_chunks += 1
 
                 processed_files.append(json_file.name)
 
