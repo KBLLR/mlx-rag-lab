@@ -30,6 +30,8 @@ dependencies = [
   "sounddevice>=0.4.7", # Live audio capture/playback for push-to-talk
   "pynput>=1.7.6", # Keyboard listener for push-to-talk mode
   "pip>=24.0", # Required by kokoro due to spaCy issue (temporary workaround)
+  "flask>=3.0.0", # Web server for voice API endpoint
+  "flask-cors>=4.0.0", # CORS support for voice API
   "regex",
   "Pillow",
   "sentencepiece",
@@ -136,3 +138,9 @@ exclude = '''
 
 [tool.uv]
 package = true
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src",
+  "."
+]
