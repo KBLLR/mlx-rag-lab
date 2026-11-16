@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
@@ -13,8 +14,10 @@ import numpy as np  # Always import numpy for fallback
 
 from rag.models.model import Model
 
-CHUNK_SIZE = 256
-CHUNK_OVERLAP = 50
+# Local patch: chunk size can be set from the environment (characters).
+# Unset variables keep the previous defaults.
+CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "256"))
+CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "50"))
 
 
 def split_text_into_chunks(text, chunk_size, overlap):
