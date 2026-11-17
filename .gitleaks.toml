@@ -1,0 +1,7 @@
+# Secret scan rules for mlx-RAG.
+# The pre-commit hook and .github/workflows/gitleaks.yml scan only new
+# commits. This file extends the upstream ruleset and does not contain secrets.
+title = "mlx-RAG"
+
+[extend]
+useDefault = true

@@ -36,6 +36,18 @@ CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` "just 
 
 ---
 
+## Configuration
+
+Copy the example environment file and fill in the values you need:
+
+```bash
+cp .env.example .env
+```
+
+`.env.example` lists every variable this repository reads, each with an empty value and a short comment (what it is, which feature uses it, where the value comes from, and whether it is required). All of them are optional. Leave a line empty to keep the in-code default named in that comment. `.env` stays on your machine and is gitignored.
+
+---
+
 ## Testing the RAG Engine
 
 The Tier 3B RAG API has a comprehensive test suite covering all endpoints, metadata filtering, and similarity scoring.
