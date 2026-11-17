@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
@@ -13,8 +14,10 @@ import numpy as np  # Always import numpy for fallback
 
 from rag.models.model import Model
 
-CHUNK_SIZE = 256
-CHUNK_OVERLAP = 50
+# Local patch: chunk size can be set from the environment (characters).
+# Unset variables keep the previous defaults.
+CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "256"))
+CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "50"))
 
 
 def split_text_into_chunks(text, chunk_size, overlap):
@@ -58,22 +61,19 @@ def chunks_to_mx_array(chunks: List[str]) -> Tuple:
 
 # This is doing the reverse operation of chunks_to_mx_array
 def mx_array_to_chunks(data, lengths) -> List[str]:
-    i = 0
+    # Local patch: decode in one pass with a running offset
+    values = data.tolist() if hasattr(data, "tolist") else list(data)
+    sizes = lengths.tolist() if hasattr(lengths, "tolist") else list(lengths)
+    if not isinstance(values, list):
+        values = [values]
+    if not isinstance(sizes, list):
+        sizes = [sizes]
     output = []
-    for l in lengths:
-        if hasattr(l, 'item'):
-            l_val = l.item()
-        else:
-            l_val = int(l)
-        j = l_val + i
-        x = []
-        for d in data[i:j]:
-            if hasattr(d, 'item'):
-                x.append(chr(d.item()))
-            else:
-                x.append(chr(int(d)))
-        output.append("".join(x))
-        i = l_val
+    i = 0
+    for size in sizes:
+        size = int(size)
+        output.append("".join(map(chr, values[i:i + size])))
+        i += size
     return output
 
 
@@ -148,7 +148,7 @@ class VectorDB:
             doc_vec = doc_vec.astype(mx.float32)
 
             # Compute cosine similarity: dot(a,b) / (||a|| * ||b|| + epsilon)
-            dot_product = mx.dot(query_vec, doc_vec)
+            dot_product = mx.sum(query_vec * doc_vec)
             query_norm = mx.linalg.norm(query_vec)
             doc_norm = mx.linalg.norm(doc_vec)
 
@@ -215,11 +215,14 @@ class VectorDB:
         # Compute cosine similarity scores only for filtered documents
         scores = []
         if MLX_AVAILABLE:
-            query_vec = query_emb[0]  # Extract first row (single query)
-            for i in filtered_indices:
-                doc_vec = self.embeddings[i]
-                score = self.score(query_vec, doc_vec)
-                scores.append((i, score))
+            query_vec = query_emb[0].astype(mx.float32)  # Extract first row (single query)
+            docs = self.embeddings.astype(mx.float32)
+            # Local patch: cosine similarity for all chunks in one matrix operation
+            sims = (docs @ query_vec) / (
+                mx.linalg.norm(docs, axis=1) * mx.linalg.norm(query_vec) + 1e-8
+            )
+            sims = sims.tolist()
+            scores = [(i, float(sims[i])) for i in filtered_indices]
         else:
             # Fallback for non-MLX (using numpy)
             query_vec = query_emb[0]

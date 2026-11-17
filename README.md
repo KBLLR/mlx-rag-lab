@@ -46,6 +46,8 @@ cp .env.example .env
 
 `.env.example` lists every variable this repository reads, each with an empty value and a short comment (what it is, which feature uses it, where the value comes from, and whether it is required). All of them are optional. Leave a line empty to keep the in-code default named in that comment. `.env` stays on your machine and is gitignored.
 
+VectorDB indexing reads `RAG_CHUNK_SIZE` and `RAG_CHUNK_OVERLAP`. Leave them empty to keep 256 characters per chunk and 50 characters of overlap. Those names are separate from `CHUNK_SIZE` and `CHUNK_OVERLAP`, which the API settings module reads.
+
 ---
 
 ## Testing the RAG Engine
