@@ -1,5 +1,21 @@
-# GitHub specific files (keep local only)
-.github/
+# GitHub specific files (keep local only). The secret-scan workflow is tracked.
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/gitleaks.yml
+
+# Local environment. Keep the committed template.
+.env
+.env.*
+!.env.example
+
+# Private keys
+*.key
+*.pem
+
+# Instruments traces and benchmark trace dumps
+*.trace
+benchmarks/traces/*.xml
 
 # Python
 __pycache__/

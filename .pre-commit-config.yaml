@@ -1,0 +1,6 @@
+# Scans staged changes (the commit being created), not repository history.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
