@@ -14,7 +14,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 from libs.mlx_core.model_engine import MLXModelEngine
 from rag.chat.templates import strip_channel_controls
-from rag.models.qwen_reranker import QwenReranker
 from rag.retrieval.vdb import VectorDB
 from rag.ingestion.create_vdb import gather_pdf_paths, extract_text, write_metadata
 from ui import FramedApp, get_console, label, build_rag_dashboard
@@ -26,6 +25,31 @@ DEFAULT_SOURCE_ROOT = Path("var/source_docs")
 DEFAULT_COLLECTION = "default"
 DEFAULT_MODEL_ID = "mlx-community/Phi-3-mini-4k-instruct-unsloth-4bit"
 DEFAULT_RERANKER_ID = "mlx-community/mxbai-rerank-large-v2"
+
+_RERANKER_MISSING = (
+    "Reranking was requested, but rag.models.qwen_reranker is not available. "
+    "Pass --no-reranker to query with raw VectorDB scores."
+)
+
+
+def load_qwen_reranker(model_id: str):
+    """Construct QwenReranker only when reranking is actually requested.
+
+    The module was never committed (it is not a rename of another file), so
+    importing it at startup took down every console script. Import it here
+    instead, and fail with a clear message only for a real rerank request.
+    """
+    try:
+        from rag.models.qwen_reranker import QwenReranker
+    except ModuleNotFoundError as exc:
+        missing = exc.name or ""
+        if missing != "rag.models.qwen_reranker" and not missing.startswith(
+            "rag.models.qwen_reranker."
+        ):
+            raise
+        raise SystemExit(_RERANKER_MISSING) from exc
+    return QwenReranker(model_id)
+
 
 # Global references for cleanup
 _model_engine = None
@@ -345,11 +369,12 @@ def main() -> None:
         console.print(f"[yellow]Collection not indexed yet. Use 'rebuild' command.[/yellow]")
         _vdb = VectorDB()  # Empty VDB
 
-    # Make reranker optional to avoid timeouts/semaphore leaks
+    # Make reranker optional to avoid timeouts/semaphore leaks.
+    # Import only when reranking is requested so --help still starts.
     if args.no_reranker:
         _reranker = None
     else:
-        _reranker = QwenReranker(args.reranker_id)
+        _reranker = load_qwen_reranker(args.reranker_id)
 
     _model_engine = MLXModelEngine(args.model_id, model_type="text")
     console.print("[green]RAG system loaded successfully![/green]\n")
