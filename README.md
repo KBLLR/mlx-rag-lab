@@ -28,11 +28,22 @@ pip install uv                      # once
 uv venv && source .venv/bin/activate
 uv sync                             # installs deps + console scripts
 
+# Optional: WhisperX diarization (PyTorch + pyannote). Not required for the RAG API.
+uv sync --extra whisperx
+
 # Launch the lab menu (voice chat, STS avatar, RAG, Flux…)
 uv run mlxlab
 ```
 
 CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` "just works". See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
+
+The RAG API is part of the installed `rag` package. From the repo root, after `uv sync`:
+
+```bash
+uv run uvicorn rag.api.main:app --reload --port 8000
+```
+
+`uv run` uses the project environment, so this is the same server as `.venv/bin/uvicorn` and does not need `PYTHONPATH`.
 
 ---
 

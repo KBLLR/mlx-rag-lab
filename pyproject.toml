@@ -26,7 +26,6 @@ dependencies = [
   "torch>=2.5.1", # Needed for pyannote + MLX whisper integrations
   "torchaudio>=2.5.1", # Matches torch 2.5 API (AudioMetaData) for diarization
   "kokoro>=0.9.2", # Kokoro TTS with phoneme output for avatar lip-sync
-  "whisperx @ git+https://github.com/sooth/whisperx-mlx.git", # WhisperX fork with MLX backend + diarization
   "sounddevice>=0.4.7", # Live audio capture/playback for push-to-talk
   "pynput>=1.7.6", # Keyboard listener for push-to-talk mode
   "pip>=24.0", # Required by kokoro due to spaCy issue (temporary workaround)
@@ -62,6 +61,15 @@ classify-cli = "rag.cli.entrypoints:classify_cli_main"
 [project.optional-dependencies]
 pdf = [
   "unstructured[pdf]~=0.18.15"
+]
+# Heavy speech stack (PyTorch, pyannote, faster-whisper). Not required for the RAG API.
+# The previous pin was whisperx @ git+https://github.com/sooth/whisperx-mlx.git,
+# locked to commit 6cdfc0e (self-reported 3.4.2). That commit was removed when the
+# fork was rewritten. PyPI 3.4.2 still exists but requires Python <3.13, which this
+# project does not support. 3.7.6 is on PyPI, supports Python 3.13, and keeps the
+# DiarizationPipeline(use_auth_token=...) constructor the client already calls.
+whisperx = [
+  "whisperx==3.7.6",
 ]
 
 [dependency-groups]
@@ -102,6 +110,11 @@ packages = [
     "rag.retrieval",
     "rag.models",
     "rag.cli",
+    "rag.api",
+    "rag.api.routes",
+    "rag.chat",
+    "rag.stt",
+    "rag.tts",
     "apps",
     "libs",
     "libs.mlx_core",

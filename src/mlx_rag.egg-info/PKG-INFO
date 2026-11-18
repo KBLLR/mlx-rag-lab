@@ -22,7 +22,6 @@ Requires-Dist: soundfile>=0.12.1
 Requires-Dist: torch>=2.5.1
 Requires-Dist: torchaudio>=2.5.1
 Requires-Dist: kokoro>=0.9.2
-Requires-Dist: whisperx@ git+https://github.com/sooth/whisperx-mlx.git
 Requires-Dist: sounddevice>=0.4.7
 Requires-Dist: pynput>=1.7.6
 Requires-Dist: pip>=24.0
@@ -40,6 +39,8 @@ Requires-Dist: fastapi>=0.115.0
 Requires-Dist: uvicorn[standard]>=0.32.0
 Provides-Extra: pdf
 Requires-Dist: unstructured[pdf]~=0.18.15; extra == "pdf"
+Provides-Extra: whisperx
+Requires-Dist: whisperx==3.7.6; extra == "whisperx"
 Dynamic: license-file
 
 # mlx‑RAG · Apple Silicon Tool Suite
@@ -72,11 +73,118 @@ pip install uv                      # once
 uv venv && source .venv/bin/activate
 uv sync                             # installs deps + console scripts
 
+# Optional: WhisperX diarization (PyTorch + pyannote). Not required for the RAG API.
+uv sync --extra whisperx
+
 # Launch the lab menu (voice chat, STS avatar, RAG, Flux…)
 uv run mlxlab
 ```
 
-CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` “just works”. See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
+CLIs are wired via `[project.scripts]`, so `uv run voice-chat-cli --help` "just works". See `docs/` for pipeline specifics and `mlx-models/README.md` for weight download tips (GPT‑OSS, Kokoro, Flux, etc.).
+
+The RAG API is part of the installed `rag` package. From the repo root, after `uv sync`:
+
+```bash
+uv run uvicorn rag.api.main:app --reload --port 8000
+```
+
+`uv run` uses the project environment, so this is the same server as `.venv/bin/uvicorn` and does not need `PYTHONPATH`.
+
+---
+
+## Configuration
+
+Copy the example environment file and fill in the values you need:
+
+```bash
+cp .env.example .env
+```
+
+`.env.example` lists every variable this repository reads, each with an empty value and a short comment (what it is, which feature uses it, where the value comes from, and whether it is required). All of them are optional. Leave a line empty to keep the in-code default named in that comment. `.env` stays on your machine and is gitignored.
+
+VectorDB indexing reads `RAG_CHUNK_SIZE` and `RAG_CHUNK_OVERLAP`. Leave them empty to keep 256 characters per chunk and 50 characters of overlap. Those names are separate from `CHUNK_SIZE` and `CHUNK_OVERLAP`, which the API settings module reads.
+
+---
+
+## Testing the RAG Engine
+
+The Tier 3B RAG API has a comprehensive test suite covering all endpoints, metadata filtering, and similarity scoring.
+
+**Run all RAG tests:**
+```bash
+# Install dev dependencies first (if not done)
+uv sync
+
+# Run the full RAG test suite
+uv run pytest tests/rag -v
+
+# Run specific test categories
+uv run pytest tests/rag/test_query_filtering.py -v  # Metadata filtering tests
+uv run pytest tests/rag/test_similarity.py -v        # Similarity scoring tests
+uv run pytest tests/rag/test_health_api.py -v        # Health endpoint tests
+uv run pytest tests/rag/test_stats_api.py -v         # Stats endpoint tests
+```
+
+**Run the RAG API server (for manual testing):**
+```bash
+# Start the FastAPI server
+uv run uvicorn rag.api.main:app --reload --port 8000
+
+# In another terminal, test endpoints
+curl http://localhost:8000/health
+curl http://localhost:8000/docs  # OpenAPI documentation
+```
+
+**Contract validation:**
+- All endpoints follow the **Phase-4 contract** (see `docs/PHASE4_PROVIDER_CONTRACT.md`)
+- Request/response schemas are validated via Pydantic models
+- Tests cover edge cases: empty filters, large k values, threshold filtering, etc.
+- All responses include `latency_ms` and support `X-Request-ID` header for tracing
+
+---
+
+## Phase-4 Integration (Tier-2 Orchestrator)
+
+This RAG engine is designed as **Tier-3B** in a 3-tier fusion architecture:
+
+```
+Tier-2: gen-idea-lab (Orchestrator)
+  ├─ Tier-3A: mlx-openai-server-lab (MLX LLM)
+  └─ Tier-3B: mlx-rag-lab (RAG Engine) ← You are here
+```
+
+**Phase-4 Features:**
+- ✅ Health endpoint with `{ ok, latency_ms }` contract
+- ✅ Request ID tracing (`X-Request-ID` header)
+- ✅ Latency measurement on all operations
+- ✅ RAG query with k/threshold/metadata filtering
+- ✅ Deterministic chunking (256 chars, 50 overlap)
+- ✅ Cosine similarity with L2-normalized embeddings
+
+**Integration Docs:**
+- `docs/PHASE4_PROVIDER_CONTRACT.md` - Complete API specification
+- `docs/PHASE4_SERVICE_TOPOLOGY.md` - 3-tier architecture overview
+- `docs/PHASE4_INTEGRATION_EXAMPLES.md` - TypeScript/Python examples
+- `_report/phase4-rag-readiness.md` - Readiness assessment
+
+**Quick Start for Tier-2 Integration:**
+```typescript
+// In gen-idea-lab (Tier-2)
+import { getRAGProvider } from './providers/rag-provider';
+
+const rag = getRAGProvider('http://localhost:8000');
+
+// Query with request tracing
+const response = await rag.query(
+  'What is MLX?',
+  'mlx_docs',
+  'request-123',
+  5,  // k
+  0.5 // threshold
+);
+
+console.log(`Found ${response.results.length} results in ${response.latency_ms}ms`);
+```
 
 ---
 
