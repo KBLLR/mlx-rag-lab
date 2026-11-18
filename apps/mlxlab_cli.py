@@ -4,6 +4,7 @@ MLX Lab v2 - Interactive CLI for MLX pipelines
 Unified interface with model management, quantization, and cache control.
 """
 
+import argparse
 import gc
 import shlex
 import shutil
@@ -1862,6 +1863,10 @@ def cleanup_handler(signum, frame):
 
 def main() -> None:
     """Entry point for mlxlab CLI."""
+    argparse.ArgumentParser(
+        description="MLX Lab – interactive launcher for MLX pipelines. Run with no arguments to open the menu."
+    ).parse_known_args()
+
     signal.signal(signal.SIGINT, cleanup_handler)
 
     try:
