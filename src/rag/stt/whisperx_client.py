@@ -7,9 +7,11 @@ toggle diarization without pulling pyannote/torch specifics into the app layer.
 
 from __future__ import annotations
 
+import importlib
+import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # torchaudio>=2.5 exposes AudioMetaData; reintroduce for newer releases where it's removed.
 try:  # pragma: no cover - platform dep
@@ -25,6 +27,47 @@ try:  # pragma: no cover - platform dep
         torchaudio.AudioMetaData = AudioMetaData  # type: ignore[attr-defined]
 except Exception:  # pragma: no cover
     torchaudio = None  # noqa: F401
+
+
+def _accepted_kwargs(func: Callable[..., Any], kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop keyword arguments the installed callable does not accept.
+
+    WhisperX 3.4.x (and the removed MLX fork) and 3.8.x disagree on a few
+    parameter names. Passing only what this install accepts keeps one client.
+    """
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return kwargs
+    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values()):
+        return kwargs
+    return {key: value for key, value in kwargs.items() if key in params}
+
+
+def _implementation(public_func: Callable[..., Any], submodule: str, name: str) -> Callable[..., Any]:
+    """Prefer the real function over a ``*args, **kwargs`` re-export.
+
+    ``whisperx.load_model`` forwards every keyword, so its signature cannot
+    tell us whether this install accepts ``backend`` or ``batch_size``.
+    """
+    module_name = getattr(public_func, "__module__", "") or ""
+    package = module_name.split(".", 1)[0]
+    if not package:
+        return public_func
+    try:
+        module = importlib.import_module(f"{package}.{submodule}")
+    except ImportError:
+        return public_func
+    return getattr(module, name, public_func)
+
+
+def _mlx_checkpoint_to_whisper_arch(model_name: str) -> str:
+    """Map an mlx-community Whisper repo id onto a faster-whisper architecture."""
+    prefix = "mlx-community/whisper-"
+    suffix = "-mlx"
+    if model_name.startswith(prefix) and model_name.endswith(suffix):
+        return model_name[len(prefix) : -len(suffix)]
+    return model_name
 
 
 @dataclass
@@ -104,8 +147,9 @@ class WhisperXClient:
             import whisperx  # type: ignore
         except ImportError as exc:  # pragma: no cover - import guard
             raise ImportError(
-                "whisperx is not installed. Install with:\n"
-                "  pip install 'whisperx @ git+https://github.com/sooth/whisperx-mlx.git'"
+                "whisperx is not installed. It is an optional extra because it "
+                "pulls PyTorch, pyannote, and faster-whisper. Install with:\n"
+                "  uv sync --extra whisperx"
             ) from exc
 
         self._whisperx = whisperx
@@ -115,21 +159,28 @@ class WhisperXClient:
 
     def _load_asr_model(self):
         """Load WhisperX ASR backend once per client."""
-        return self._whisperx.load_model(
-            self.config.model_name,
-            device=self.config.device,
-            compute_type=self.config.compute_type,
-            batch_size=self.config.batch_size,
-            asr_options=self.config.asr_options,
-            language=self.config.language,
-            vad_method=self.config.vad_method,
-            vad_options=self.config.vad_options,
-            task=self.config.task,
-            download_root=self.config.model_dir,
-            local_files_only=self.config.model_cache_only,
-            threads=self.config.threads,
-            backend=self.config.backend,
-        )
+        model_name = self.config.model_name
+        kwargs = {
+            "device": self.config.device,
+            "compute_type": self.config.compute_type,
+            "batch_size": self.config.batch_size,
+            "asr_options": self.config.asr_options,
+            "language": self.config.language,
+            "vad_method": self.config.vad_method,
+            "vad_options": self.config.vad_options,
+            "task": self.config.task,
+            "download_root": self.config.model_dir,
+            "local_files_only": self.config.model_cache_only,
+            "threads": self.config.threads,
+            "backend": self.config.backend,
+        }
+        load_model = _implementation(self._whisperx.load_model, "asr", "load_model")
+        accepted = _accepted_kwargs(load_model, kwargs)
+        # PyPI WhisperX (3.8.x) has no MLX backend. The removed sooth fork
+        # accepted backend="mlx" plus mlx-community checkpoint ids.
+        if "backend" not in accepted and self.config.backend == "mlx":
+            model_name = _mlx_checkpoint_to_whisper_arch(model_name)
+        return load_model(model_name, **accepted)
 
     def _get_align_model(self, language: str):
         """Lazy-load align models per language."""
@@ -155,11 +206,20 @@ class WhisperXClient:
             return None
 
         if self._diarize_pipeline is None:
-            self._diarize_pipeline = self._whisperx.diarize.DiarizationPipeline(  # type: ignore[attr-defined]
-                model_name=self.config.diarize_model,
-                use_auth_token=self.config.hf_token,
-                device=self.config.diarize_device,
+            diarize_mod = getattr(self._whisperx, "diarize", None)
+            if diarize_mod is None:
+                diarize_mod = importlib.import_module("whisperx.diarize")
+            pipeline_cls = diarize_mod.DiarizationPipeline
+            init_kwargs = _accepted_kwargs(
+                pipeline_cls.__init__,
+                {
+                    "model_name": self.config.diarize_model,
+                    "use_auth_token": self.config.hf_token,
+                    "token": self.config.hf_token,
+                    "device": self.config.diarize_device,
+                },
             )
+            self._diarize_pipeline = pipeline_cls(**init_kwargs)
 
         return self._diarize_pipeline
 

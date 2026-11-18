@@ -58,8 +58,9 @@ mlx-models/manifests/
 *.tmp
 benchmarks/traces/
 
-# Entire models directory (all contents should be local)
-models/
+# Downloaded weights at the repo root. A bare `models/` pattern also
+# ignores src/rag/models, which is the installable Python package.
+/models/
 mlx-models/all-MiniLM-L6-v2/
 mlx-models/encodec-32khz-float32/
 mlx-models/llasa-3b-Q4-mlx/
